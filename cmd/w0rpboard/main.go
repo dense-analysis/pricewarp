@@ -51,7 +51,7 @@ func main() {
 
     http.HandleFunc("/post", postListHandler)
 
-    fmt.Printf("Server started at localhost:8080\n")
+    fmt.Printf("Server started at localhost:8081\n")
 
-    log.Fatal(http.ListenAndServe(":8080", nil))
+    log.Fatal(http.ListenAndServe(":8081", nil))
 }
