@@ -11,7 +11,7 @@ interface AppState {
 }
 
 /**
- * The w0rpboard app.
+ * The pricewarp app.
  */
 export class App extends Component<AppProps, AppState> {
   render() {

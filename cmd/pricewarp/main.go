@@ -5,7 +5,7 @@ import (
     "fmt"
     "log"
     "net/http"
-    "github.com/w0rp/w0rpboard/pkg/lax"
+    "github.com/w0rp/lax"
 )
 
 func readCliOptions() {

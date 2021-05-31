@@ -10,6 +10,7 @@
 /build
 /dist
 /bin
+/main
 
 # Misc files
 .DS_Store

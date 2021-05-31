@@ -30,6 +30,6 @@ module.exports = {
   },
   output: {
     path: path.join(__dirname, '/dist'),
-    filename: 'w0rpboard.js',
+    filename: 'pricewarp.js',
   },
 }
