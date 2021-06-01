@@ -12,6 +12,9 @@
 /bin
 /main
 
+# Configuration file
+/env.sh
+
 # Misc files
 .DS_Store
 .env.local
