@@ -34,6 +34,11 @@ DB_PORT=5432
 DB_NAME=some_database
 ```
 
+## Loading Price Data
+
+Run `bin/ingest` to load cryptocurrency price data into the database. This
+should be run periodically to get the latest prices for cryptocurrencies.
+
 ## Running the Server
 
 _TO DO_

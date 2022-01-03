@@ -2,8 +2,10 @@
 
 set -eu
 
-(
-    echo "Building bin/migrate..."
-    cd cmd/migrate
-    go build -o ../../bin/migrate
-)
+for executable in migrate ingest; do
+    (
+        echo "Building bin/$executable..."
+        cd "cmd/$executable"
+        go build -o "../../bin/$executable"
+    )
+done
