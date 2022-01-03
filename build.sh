@@ -2,7 +2,7 @@
 
 set -eu
 
-for executable in migrate ingest; do
+for executable in migrate ingest notify; do
     (
         echo "Building bin/$executable..."
         cd "cmd/$executable"

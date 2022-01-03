@@ -39,6 +39,7 @@ CREATE TABLE crypto_alert (
     "to" integer NOT NULL,
     value numeric(40, 20) NOT NULL,
     above boolean NOT NULL,
+    time timestamp without time zone NOT NULL,
     sent boolean NOT NULL,
     PRIMARY KEY (id),
     FOREIGN KEY (user_id) REFERENCES crypto_user (id),

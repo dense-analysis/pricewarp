@@ -11,10 +11,9 @@ import (
 	"io/ioutil"
 	"strings"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgtype"
-	shopspring "github.com/jackc/pgtype/ext/shopspring-numeric"
 	"github.com/shopspring/decimal"
 	"github.com/joho/godotenv"
+	"github.com/w0rp/pricewarp/internal/database"
 )
 
 type BinanceTickerResult struct {
@@ -180,28 +179,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn, err := pgx.Connect(
-		context.Background(),
-		fmt.Sprintf(
-			"postgres://%s:%s@%s:%s/%s",
-			os.Getenv("DB_USERNAME"),
-			os.Getenv("DB_PASSWORD"),
-			os.Getenv("DB_HOST"),
-			os.Getenv("DB_PORT"),
-			os.Getenv("DB_NAME"),
-		),
-	)
+	conn, err := database.Connect()
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Connection error: %s\n", err)
 		os.Exit(1)
 	}
-
-	conn.ConnInfo().RegisterDataType(pgtype.DataType{
-		Value: &shopspring.Numeric{},
-		Name: "numeric",
-		OID: pgtype.NumericOID,
-	})
 
 	tickerResults, err := readBinanceTickerResults()
 
