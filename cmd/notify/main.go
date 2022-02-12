@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"io"
@@ -10,9 +9,8 @@ import (
 	"strconv"
 	"crypto/tls"
 	"net/smtp"
-	"github.com/jackc/pgx/v4"
 	"github.com/shopspring/decimal"
-	"github.com/joho/godotenv"
+	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
 )
 
@@ -25,9 +23,8 @@ type CryptoAlert struct {
 	Value decimal.Decimal
 }
 
-func findAlertsToTrigger(conn *pgx.Conn) ([]*CryptoAlert, error) {
+func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
 	rows, err := conn.Query(
-		context.Background(),
 		`
 			SELECT
 				crypto_alert.id,
@@ -181,7 +178,7 @@ The following cryptocurrencies are above or below your desired prices:
 	return nil
 }
 
-func markAlertsAsSent(conn *pgx.Conn, alertList []*CryptoAlert) error {
+func markAlertsAsSent(conn *database.Conn, alertList []*CryptoAlert) error {
 	markers := make([]string, len(alertList))
 	ids := make([]interface{}, len(alertList))
 
@@ -192,16 +189,11 @@ func markAlertsAsSent(conn *pgx.Conn, alertList []*CryptoAlert) error {
 
 	query := "UPDATE crypto_alert SET sent = true WHERE id IN (" + strings.Join(markers, ",") + ")"
 
-	_, err := conn.Exec(context.Background(), query, ids...)
-
-	return err
+	return conn.Exec(query, ids...)
 }
 
 func main() {
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Fprintf(os.Stderr, ".env error: %s\n", err)
-		os.Exit(1)
-	}
+	env.LoadEnvironmentVariables()
 
 	conn, err := database.Connect()
 
@@ -209,6 +201,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Connection error: %s\n", err)
 		os.Exit(1)
 	}
+
+	defer conn.Close()
 
 	alertList, err := findAlertsToTrigger(conn)
 

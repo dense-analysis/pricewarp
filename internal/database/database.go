@@ -1,3 +1,4 @@
+// Package database wraps the database implmementation used for Pricewarp
 package database
 
 import (
@@ -5,33 +6,142 @@ import (
 	"os"
 	"fmt"
 	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/pgtype"
 	shopspring "github.com/jackc/pgtype/ext/shopspring-numeric"
 )
 
-// Connect connects to the Postgres database with the project environment variables
-func Connect() (*pgx.Conn, error) {
-	conn, err := pgx.Connect(
-		context.Background(),
-		fmt.Sprintf(
-			"postgres://%s:%s@%s:%s/%s",
-			os.Getenv("DB_USERNAME"),
-			os.Getenv("DB_PASSWORD"),
-			os.Getenv("DB_HOST"),
-			os.Getenv("DB_PORT"),
-			os.Getenv("DB_NAME"),
-		),
-	)
+type Conn struct {
+	pgxConn *pgxpool.Conn
+}
+type Tx struct {
+	pgxTx pgx.Tx
+}
 
-	if err != nil {
-		return nil, err
-	}
+type Row = pgx.Row
+type Rows = pgx.Rows
+type Batch = pgx.Batch
+type BatchResults = pgx.BatchResults
 
+func afterConnect(context context.Context, conn *pgx.Conn) error {
+	// Set up a decimal type for prices.
 	conn.ConnInfo().RegisterDataType(pgtype.DataType{
 		Value: &shopspring.Numeric{},
 		Name: "numeric",
 		OID: pgtype.NumericOID,
 	})
 
-	return conn, err
+	return nil
+}
+
+// Connect connects to the Postgres database with the project environment variables
+func Connect() (*Conn, error) {
+	config, err := pgxpool.ParseConfig(fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s",
+		os.Getenv("DB_USERNAME"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_NAME"),
+	))
+
+	if err != nil {
+		return nil, err
+	}
+
+	config.AfterConnect = afterConnect
+
+	pool, err := pgxpool.ConnectConfig(context.Background(), config)
+
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := pool.Acquire(context.Background())
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Conn{conn}, nil
+}
+
+// Close closes a database connection
+func (conn *Conn) Close() {
+	conn.pgxConn.Release()
+}
+
+// Exec executes a database query
+func (conn *Conn) Exec(sql string, arguments ...interface{}) error {
+	_, err := conn.pgxConn.Exec(context.Background(), sql, arguments...)
+
+	return err
+}
+
+// QueryRow executes a database query
+func (conn *Conn) Query(sql string, arguments ...interface{}) (Rows, error) {
+	return conn.pgxConn.Query(context.Background(), sql, arguments...)
+}
+
+// QueryRow executes a database query returning Row data
+func (conn *Conn) QueryRow(sql string, arguments ...interface{}) Row {
+	return conn.pgxConn.QueryRow(context.Background(), sql, arguments...)
+}
+
+// SendBatch send a series of queries in a batch.
+func (conn *Conn) SendBatch(batch *Batch) BatchResults {
+	return conn.pgxConn.SendBatch(context.Background(), batch)
+}
+
+// CopyFrom copies rows into a database.
+func (conn *Conn) CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error) {
+	return conn.pgxConn.CopyFrom(context.Background(), pgx.Identifier{tableName}, columNames, pgx.CopyFromRows(rows))
+}
+
+// Begin starts a new transaction
+func (conn *Conn) Begin() (*Tx, error) {
+	tx, err := conn.pgxConn.Begin(context.Background())
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Tx{tx}, err
+}
+
+// Commit commits a transaction to the database
+func (tx *Tx) Commit() error {
+	return tx.pgxTx.Commit(context.Background())
+}
+
+// Rollback cancels a transaction in the database
+func (tx *Tx) Rollback() error {
+	return tx.pgxTx.Rollback(context.Background())
+}
+
+// Exec executes a database query
+func (tx *Tx) Exec(sql string, arguments ...interface{}) error {
+	_, err := tx.pgxTx.Exec(context.Background(), sql, arguments...)
+
+	return err
+}
+
+// QueryRow executes a database query
+func (tx *Tx) Query(sql string, arguments ...interface{}) (Rows, error) {
+	return tx.pgxTx.Query(context.Background(), sql, arguments...)
+}
+
+// QueryRow executes a database query returning Row data
+func (tx *Tx) QueryRow(sql string, arguments ...interface{}) Row {
+	return tx.pgxTx.QueryRow(context.Background(), sql, arguments...)
+}
+
+// SendBatch send a series of queries in a batch.
+func (tx *Tx) SendBatch(batch *Batch) BatchResults {
+	return tx.pgxTx.SendBatch(context.Background(), batch)
+}
+
+// CopyFrom copies rows into a database.
+func (tx *Tx) CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error) {
+	return tx.pgxTx.CopyFrom(context.Background(), pgx.Identifier{tableName}, columNames, pgx.CopyFromRows(rows))
 }

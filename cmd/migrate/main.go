@@ -6,23 +6,20 @@ import (
 	"os"
 	"fmt"
 	"strconv"
-	"context"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
-	"github.com/jackc/pgx/v4"
-	"github.com/joho/godotenv"
+	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
 )
 
-
 type MigrationExecutor struct {
-	connection *pgx.Conn
+	connection *database.Conn
 	directoryName string
 	migrationFileList []string
 }
 
-func NewMigrationExecutor(connection *pgx.Conn, directoryName string) (*MigrationExecutor, error) {
+func NewMigrationExecutor(connection *database.Conn, directoryName string) (*MigrationExecutor, error) {
 	fileList, err := ioutil.ReadDir(directoryName)
 
 	if err != nil {
@@ -41,17 +38,13 @@ func NewMigrationExecutor(connection *pgx.Conn, directoryName string) (*Migratio
 }
 
 func (executor *MigrationExecutor) CreateMigrationTable() error {
-	_, err := executor.connection.Exec(
-		context.Background(),
+	return executor.connection.Exec(
 		"CREATE TABLE IF NOT EXISTS crypto_migration (id serial, migration_number integer NOT NULL UNIQUE);",
 	)
-
-	return err
 }
 
 func (executor *MigrationExecutor) CurrentMigration() (int, error) {
 	row := executor.connection.QueryRow(
-		context.Background(),
 		"SELECT COALESCE(MAX(migration_number), 0) FROM crypto_migration;",
 	)
 
@@ -87,7 +80,7 @@ func (executor *MigrationExecutor) applyMigration(migrationNumber int, reverse b
 		return false, readErr
 	}
 
-	batch := &pgx.Batch{}
+	batch := &database.Batch{}
 	// NOTE: SQL functions in migration files won't work.
 	queries := strings.Split(string(file), ";\n")
 
@@ -107,7 +100,7 @@ func (executor *MigrationExecutor) applyMigration(migrationNumber int, reverse b
 		)
 	}
 
-	results := executor.connection.SendBatch(context.Background(), batch)
+	results := executor.connection.SendBatch(batch)
 
 	if _, err := results.Exec(); err != nil {
 		return false, err
@@ -180,10 +173,7 @@ func parseSelectedMigration() int {
 func main() {
 	selectedMigration := parseSelectedMigration()
 
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Fprintf(os.Stderr, ".env error: %s\n", err)
-		os.Exit(1)
-	}
+	env.LoadEnvironmentVariables()
 
 	conn, connectionErr := database.Connect()
 
@@ -191,6 +181,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Connection error: %s\n", connectionErr)
 		os.Exit(1)
 	}
+
+	defer conn.Close()
 
 	executor, executorErr := NewMigrationExecutor(conn, "migrations")
 

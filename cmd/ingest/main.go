@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -10,9 +9,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strings"
-	"github.com/jackc/pgx/v4"
 	"github.com/shopspring/decimal"
-	"github.com/joho/godotenv"
+	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
 )
 
@@ -89,8 +87,8 @@ func readPrices(results []BinanceTickerResult) []CryptoPrice {
 	return prices
 }
 
-func writeCurrencies(transaction pgx.Tx, prices []CryptoPrice) error {
-	tickerRows, err := transaction.Query(context.Background(), "SELECT ticker from crypto_currency")
+func writeCurrencies(transaction *database.Tx, prices []CryptoPrice) error {
+	tickerRows, err := transaction.Query("SELECT ticker from crypto_currency")
 
 	if err != nil {
 		return err
@@ -116,20 +114,15 @@ func writeCurrencies(transaction pgx.Tx, prices []CryptoPrice) error {
 	}
 
 	if len(inputRows) > 0 {
-		_, err = transaction.CopyFrom(
-			context.Background(),
-			pgx.Identifier{"crypto_currency"},
-			[]string{"ticker", "name"},
-			pgx.CopyFromRows(inputRows),
-		)
+		_, err = transaction.CopyFrom("crypto_currency", []string{"ticker", "name"}, inputRows)
 	}
 
 	return err
 }
 
-func writePrices(transaction pgx.Tx, prices []CryptoPrice) error {
+func writePrices(transaction *database.Tx, prices []CryptoPrice) error {
 	timestamp := time.Now()
-	tickerRows, err := transaction.Query(context.Background(), "SELECT id, ticker from crypto_currency")
+	tickerRows, err := transaction.Query("SELECT id, ticker from crypto_currency")
 
 	if err != nil {
 		return err
@@ -162,22 +155,14 @@ func writePrices(transaction pgx.Tx, prices []CryptoPrice) error {
 	}
 
 	if len(inputRows) > 0 {
-		_, err = transaction.CopyFrom(
-			context.Background(),
-			pgx.Identifier{"crypto_price"},
-			[]string{"from", "to", "time", "value"},
-			pgx.CopyFromRows(inputRows),
-		)
+		_, err = transaction.CopyFrom("crypto_price", []string{"from", "to", "time", "value"}, inputRows)
 	}
 
 	return err
 }
 
 func main() {
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Fprintf(os.Stderr, ".env error: %s\n", err)
-		os.Exit(1)
-	}
+	env.LoadEnvironmentVariables()
 
 	conn, err := database.Connect()
 
@@ -185,6 +170,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Connection error: %s\n", err)
 		os.Exit(1)
 	}
+
+	defer conn.Close()
 
 	tickerResults, err := readBinanceTickerResults()
 
@@ -195,8 +182,8 @@ func main() {
 
 	prices := readPrices(tickerResults)
 
-	transaction, _ := conn.Begin(context.Background())
-	defer transaction.Commit(context.Background())
+	transaction, _ := conn.Begin()
+	defer transaction.Commit()
 
 	err = writeCurrencies(transaction, prices)
 

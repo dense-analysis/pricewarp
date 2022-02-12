@@ -2,7 +2,8 @@ CREATE TABLE crypto_user (
     id serial,
     username text NOT NULL,
     password text NOT NULL,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    CONSTRAINT unique_username UNIQUE (username)
 );
 
 CREATE TABLE crypto_session (

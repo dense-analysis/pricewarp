@@ -2,7 +2,7 @@
 
 set -eu
 
-for executable in migrate ingest notify; do
+for executable in migrate ingest notify adduser pricewarp; do
     (
         echo "Building bin/$executable..."
         cd "cmd/$executable"

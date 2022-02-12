@@ -38,6 +38,8 @@ SMTP_PASSWORD=email_password
 SMTP_FROM=email_username@email.host
 SMTP_HOST=email.host
 SMTP_PORT=465
+
+SESSION_SECRET=some_32_char_secret_cookie_value
 ```
 
 ## Loading Price Data
