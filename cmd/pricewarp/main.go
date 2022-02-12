@@ -42,7 +42,7 @@ func main() {
 	router.HandleFunc("/alert", alert.HandleAlertList).Methods("GET")
 	router.HandleFunc("/alert", alert.HandleSubmitAlert).Methods("POST")
 	router.HandleFunc("/alert/{id}", alert.HandleAlert).Methods("GET")
-	router.HandleFunc("/alert/{id}", alert.HandleUpdateAlert).Methods("PUT")
+	router.HandleFunc("/alert/{id}", alert.HandleUpdateAlert).Methods("POST")
 	router.HandleFunc("/alert/{id}", alert.HandleDeleteAlert).Methods("DELETE")
 
 	log.Println("Server started")

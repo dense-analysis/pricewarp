@@ -8,6 +8,7 @@ import (
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/route/util"
 )
 
 var htmlTemplate = `<!DOCTYPE html>
@@ -57,9 +58,8 @@ func HandleLogin(writer http.ResponseWriter, request *http.Request) {
 	conn, connectionErr := database.Connect()
 
 	if connectionErr != nil {
-		// Improve on the database connection error
-		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, "database connection error\n")
+		util.RespondInternalServerError(writer, connectionErr)
+
 		return
 	}
 

@@ -23,6 +23,8 @@ type Rows = pgx.Rows
 type Batch = pgx.Batch
 type BatchResults = pgx.BatchResults
 
+var ErrNoRows = pgx.ErrNoRows
+
 func afterConnect(context context.Context, conn *pgx.Conn) error {
 	// Set up a decimal type for prices.
 	conn.ConnInfo().RegisterDataType(pgtype.DataType{

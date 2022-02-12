@@ -6,13 +6,6 @@ CREATE TABLE crypto_user (
     CONSTRAINT unique_username UNIQUE (username)
 );
 
-CREATE TABLE crypto_session (
-    id text,
-    expires_at timestamp without time zone NOT NULL,
-    data jsonb NOT NULL,
-    PRIMARY KEY (id)
-);
-
 CREATE TABLE crypto_currency (
     id serial,
     ticker text NOT NULL,
