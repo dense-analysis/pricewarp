@@ -4,42 +4,15 @@ package alert
 import (
 	"fmt"
 	"strconv"
-	"strings"
-	"html"
 	"net/http"
 	"github.com/shopspring/decimal"
 	"github.com/gorilla/mux"
+	"github.com/w0rp/pricewarp/internal/template"
 	"github.com/w0rp/pricewarp/internal/database"
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/route/util"
 )
-
-var htmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<title>Pricewarp</title>
-	</head>
-	<body>
-		<div>
-			<button id="logout" type="button">Logout</button>
-		</div>
-		{htmlBody}
-		<script>
-			document.getElementById("logout")
-				.addEventListener("click", () => {
-					fetch("/logout", {
-						method: "POST",
-					})
-						.then(() => {
-							window.location.assign("/")
-						})
-				})
-		</script>
-	</body>
-</html>
-`
 
 type FallbackUserOption bool
 
@@ -90,33 +63,55 @@ func ScanCurrency(row database.Row, currency *model.Currency) error {
 	return row.Scan(&currency.ID, &currency.Ticker, &currency.Name)
 }
 
-func loadAlertList(userID int) ([]model.Alert, error) {
-	conn, err := database.Connect()
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
+func loadAlertList(conn *database.Conn, userID int, alertList *[]model.Alert) error {
 	rows, err := conn.Query(alertQuery + "where user_id = $1 order by time", userID)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	alertList := make([]model.Alert, 0, 1)
+	*alertList = make([]model.Alert, 0, 1)
 	var alert model.Alert
 
 	for rows.Next() {
 		if err := ScanAlert(rows, &alert); err != nil {
-			return nil, err
+			return err
 		}
 
-		alertList = append(alertList, alert)
+		*alertList = append(*alertList, alert)
 	}
 
-	return alertList, nil
+	return nil
+}
+
+func loadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error {
+	conn, err := database.Connect()
+
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	*currencyList = make([]model.Currency, 0, 500)
+
+	rows, err := conn.Query(currencyQuery + "order by name")
+
+	if err != nil {
+		return err
+	}
+
+	var currency model.Currency
+
+	for rows.Next() {
+		if err := ScanCurrency(rows, &currency); err != nil {
+			return err
+		}
+
+		*currencyList = append(*currencyList, currency)
+	}
+
+	return nil
 }
 
 func requireUser(writer http.ResponseWriter, request *http.Request, fallback FallbackUserOption) *model.User {
@@ -143,196 +138,59 @@ func requireUser(writer http.ResponseWriter, request *http.Request, fallback Fal
 	return nil
 }
 
-func buildCurrencyOptionsHtml(currencyList []model.Currency, selectedID int) string {
-	var optionsHtml string
-
-	for _, currency := range currencyList {
-		selected := ""
-
-		if currency.ID == selectedID {
-			selected = " selected"
-		}
-
-		optionsHtml += fmt.Sprintf(
-			"<option value=\"%d\"%s>%s</option>\n",
-			currency.ID,
-			selected,
-			html.EscapeString(currency.Name),
-		)
-	}
-
-	return optionsHtml
+type AlertPageData struct {
+	Alert model.Alert
+	FromCurrencyList []model.Currency
+	ToCurrencyList []model.Currency
 }
 
-func buildAlertForm(alert *model.Alert) (string, error) {
+type AlertListPageData struct {
+	AlertPageData
+	AlertList []model.Alert
+}
+
+func HandleAlertList(writer http.ResponseWriter, request *http.Request) {
+	user := requireUser(writer, request, RedirectIfNoUser)
+
+	if user == nil {
+		return
+	}
+
+	data := AlertListPageData{}
+	data.Alert.Above = true
+
 	conn, err := database.Connect()
 
 	if err != nil {
-		return "", err
+		util.RespondInternalServerError(writer, err)
+
+		return
 	}
 
 	defer conn.Close()
 
-	currencyList := make([]model.Currency, 0, 500)
-
-	rows, err := conn.Query(currencyQuery + "order by name")
-
-	if err != nil {
-		return "", err
-	}
-
-	var currency model.Currency
-
-	for rows.Next() {
-		if err := ScanCurrency(rows, &currency); err != nil {
-			return "", err
-		}
-
-		currencyList = append(currencyList, currency)
-	}
-
-	var alertFormTemplate = `
-		<form method="post">
-			<p>Price Alert</p>
-			<p>Alert me when value of...</p>
-			<select name="from">
-				{fromOptions}
-			</select>
-			<p>goes</p>
-			<label>
-				<input type="radio" name="direction" value="above"{aboveChecked}>
-				above
-			</label>
-			<label>
-				<input type="radio" name="direction" value="below"{belowChecked}>
-				below
-			</label>
-			<input type="text" pattern="^\d*(\.\d*)?$" name="value" value="{value}">
-			<select name="to">
-				{toOptions}
-			</select>
-			<button>Submit</button>
-		</form>
-	`
-
-	fromOptions := buildCurrencyOptionsHtml(currencyList, alert.From.ID)
-	toOptions := buildCurrencyOptionsHtml(currencyList, alert.To.ID)
-
-	method := "post"
-	aboveChecked := ""
-	belowChecked := ""
-
-	if alert.Above {
-		aboveChecked = " checked"
-	} else {
-		belowChecked = " checked"
-	}
-
-	html := alertFormTemplate
-	html = strings.Replace(html, "{method}", method, 1)
-	html = strings.Replace(html, "{aboveChecked}", aboveChecked, 1)
-	html = strings.Replace(html, "{belowChecked}", belowChecked, 1)
-	html = strings.Replace(html, "{value}", alert.Value.String(), 1)
-	html = strings.Replace(html, "{fromOptions}", fromOptions, 1)
-	html = strings.Replace(html, "{toOptions}", toOptions, 1)
-
-	return html, nil
-}
-
-func HandleAlertList(writer http.ResponseWriter, request *http.Request) {
-	var alertListBodyTemplate = `
-		{alertForm}
-		<hr>
-		<table>
-			<tbody>
-				{alertRows}
-			</tbody>
-		</table>
-		<script>
-			document
-				.querySelectorAll("button[data-delete-id]")
-				.forEach(button => {
-					const id = button.dataset.deleteId
-
-					button.addEventListener("click", () => {
-						fetch("/alert/" + id, {
-							method: "DELETE",
-						})
-							.then(response => {
-								if (response.ok) {
-									window.location.reload()
-								}
-							})
-					})
-				})
-		</script>
-	`
-	var alertRowTemplate = `
-		<tr>
-			<td>{alertDescription}</td>
-			<td><a href="/alert/{alertID}">Update</a></td>
-			<td><button type="button" data-delete-id="{alertID}">Delete</a></td>
-		</tr>
-	`
-
-	user := requireUser(writer, request, RedirectIfNoUser)
-
-	if user == nil {
-		return
-	}
-
-	alertList, err := loadAlertList(user.ID)
-
-	if err != nil {
+	if err := loadAlertList(conn, user.ID, &data.AlertList); err != nil {
 		util.RespondInternalServerError(writer, err)
 
 		return
 	}
 
-	var alertRowsHtml string
-
-	for _, alert := range alertList {
-		direction := "≤"
-
-		if alert.Above {
-			direction = "≥"
-		}
-
-		alertDescription := html.EscapeString(fmt.Sprintf(
-			"%s %s %s %s",
-			alert.From.Name,
-			direction,
-			alert.Value.StringFixed(2),
-			alert.To.Name,
-		))
-
-		html := strings.Replace(alertRowTemplate, "{alertDescription}", alertDescription, 1)
-		html = strings.Replace(html, "{alertID}", strconv.Itoa(alert.ID), -1)
-
-		alertRowsHtml += html
-	}
-
-	newAlert := model.Alert{Above: true}
-	alertForm, err := buildAlertForm(&newAlert)
-
-	if err != nil {
+	if err := loadCurrencyList(conn, &data.FromCurrencyList); err != nil {
 		util.RespondInternalServerError(writer, err)
 
 		return
 	}
 
-	html := htmlTemplate
-	html = strings.Replace(html, "{htmlBody}", alertListBodyTemplate, 1)
-	html = strings.Replace(html, "{alertForm}", alertForm, 1)
-	html = strings.Replace(html, "{alertRows}", alertRowsHtml, 1)
-	fmt.Fprint(writer, html)
+	data.ToCurrencyList = data.FromCurrencyList
+
+	template.Render(template.AlertList, writer, data)
 }
 
-func loadAlertForRequest(writer http.ResponseWriter, request *http.Request) *model.Alert {
+func loadAlertForRequest(writer http.ResponseWriter, request *http.Request, alert *model.Alert) bool {
 	user := requireUser(writer, request, RedirectIfNoUser)
 
 	if user == nil {
-		return nil
+		return false
 	}
 
 	alertID, err := strconv.Atoi(mux.Vars(request)["id"])
@@ -340,7 +198,7 @@ func loadAlertForRequest(writer http.ResponseWriter, request *http.Request) *mod
 	if err != nil {
 		util.RespondNotFound(writer)
 
-		return nil
+		return false
 	}
 
 	conn, err := database.Connect()
@@ -349,40 +207,52 @@ func loadAlertForRequest(writer http.ResponseWriter, request *http.Request) *mod
 
 	row := conn.QueryRow(alertQuery + " where user_id = $1 and crypto_alert.id = $2", user.ID, alertID)
 
-	var alert model.Alert
-
-	if err := ScanAlert(row, &alert); err != nil {
+	if err := ScanAlert(row, alert); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
 			util.RespondInternalServerError(writer, err)
 		}
 
-		return nil
+		return false
 	}
 
-	return &alert
+	return true
 }
 
 func HandleAlert(writer http.ResponseWriter, request *http.Request) {
-	var alertBodyTemplate = `
-		{alertForm}
-	`
+	user := requireUser(writer, request, RedirectIfNoUser)
 
-	if alert := loadAlertForRequest(writer, request); alert != nil {
-		alertForm, err := buildAlertForm(alert)
-
-		if err != nil {
-			util.RespondInternalServerError(writer, err)
-
-			return
-		}
-
-		html := htmlTemplate
-		html = strings.Replace(html, "{htmlBody}", alertBodyTemplate, 1)
-		html = strings.Replace(html, "{alertForm}", alertForm, 1)
-		fmt.Fprint(writer, html)
+	if user == nil {
+		return
 	}
+
+	data := AlertPageData{}
+	data.Alert.Above = true
+
+	if !loadAlertForRequest(writer, request, &data.Alert) {
+		return
+	}
+
+	conn, err := database.Connect()
+
+	if err != nil {
+		util.RespondInternalServerError(writer, err)
+
+		return
+	}
+
+	defer conn.Close()
+
+	if err := loadCurrencyList(conn, &data.FromCurrencyList); err != nil {
+		util.RespondInternalServerError(writer, err)
+
+		return
+	}
+
+	data.ToCurrencyList = data.FromCurrencyList
+
+	template.Render(template.AlertList, writer, data)
 }
 
 func loadAlertFromRequest(alert *model.Alert, writer http.ResponseWriter, request *http.Request) bool {
@@ -502,13 +372,13 @@ func HandleSubmitAlert(writer http.ResponseWriter, request *http.Request) {
 }
 
 func HandleUpdateAlert(writer http.ResponseWriter, request *http.Request) {
-	alert := loadAlertForRequest(writer, request)
+	var alert model.Alert
 
-	if alert == nil {
+	if !loadAlertForRequest(writer, request, &alert) {
 		return
 	}
 
-	if loadAlertFromRequest(alert, writer, request) {
+	if loadAlertFromRequest(&alert, writer, request) {
 		updateSQL := `
 		update crypto_alert
 		set above = $2,
@@ -541,25 +411,29 @@ func HandleUpdateAlert(writer http.ResponseWriter, request *http.Request) {
 }
 
 func HandleDeleteAlert(writer http.ResponseWriter, request *http.Request) {
-	if alert := loadAlertForRequest(writer, request); alert != nil {
-		conn, err := database.Connect()
+	var alert model.Alert
 
-		if err != nil {
-			util.RespondInternalServerError(writer, err)
-
-			return
-		}
-
-		defer conn.Close()
-
-		err = conn.Exec("delete from crypto_alert where id = $1", alert.ID)
-
-		if err != nil {
-			util.RespondInternalServerError(writer, err)
-
-			return
-		}
-
-		writer.WriteHeader(http.StatusNoContent)
+	if !loadAlertForRequest(writer, request, &alert) {
+		return
 	}
+
+	conn, err := database.Connect()
+
+	if err != nil {
+		util.RespondInternalServerError(writer, err)
+
+		return
+	}
+
+	defer conn.Close()
+
+	err = conn.Exec("delete from crypto_alert where id = $1", alert.ID)
+
+	if err != nil {
+		util.RespondInternalServerError(writer, err)
+
+		return
+	}
+
+	writer.WriteHeader(http.StatusNoContent)
 }

@@ -1,0 +1,15 @@
+{{define "main"}}
+  {{template "alert-form" .}}
+  <hr>
+  <table>
+    <tbody>
+      {{range .AlertList}}
+        <tr>
+          <td>{{.From.Name}} {{if .Above}}≥{{else}}≤{{end}} {{.Value.StringFixed 2}} {{.To.Name}}</td>
+          <td><a href="/alert/{{.ID}}">Update</a></td>
+          <td><button type="button" data-delete-id="{{.ID}}">Delete</a></td>
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+{{end}}

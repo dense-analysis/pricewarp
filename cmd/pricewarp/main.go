@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/session"
+	"github.com/w0rp/pricewarp/internal/template"
 	"github.com/w0rp/pricewarp/internal/route/auth"
 	"github.com/w0rp/pricewarp/internal/route/alert"
 )
@@ -37,6 +38,7 @@ func handleIndex(writer http.ResponseWriter, request *http.Request) {
 func main() {
 	env.LoadEnvironmentVariables()
 	session.InitSessionStorage()
+	template.Init()
 
 	router := mux.NewRouter().StrictSlash(true)
 

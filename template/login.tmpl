@@ -1,0 +1,18 @@
+{{define "main"}}
+<form method="post">
+  {{if .ErrorMessage}}
+    <div class="error">
+      {{.ErrorMessage}}
+    </div>
+  {{end}}
+  <label>
+    Username:
+    <input type="text" name="username" autocomplete="on">
+  </label>
+  <label>
+    Password:
+    <input type="password" name="password" autocomplete="on">
+  </label>
+  <button>Submit</button>
+</form>
+{{end}}

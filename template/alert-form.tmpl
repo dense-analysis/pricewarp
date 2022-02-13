@@ -1,0 +1,36 @@
+{{define "alert-form"}}
+  {{$alert := .Alert}}
+  <form method="post">
+    <p>Price Alert</p>
+    <p>Alert me when value of...</p>
+    <select name="from">
+      {{range .FromCurrencyList}}
+        <option value="{{.ID}}"{{if eq .ID $alert.From.ID}} selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    <p>goes</p>
+    <label>
+      {{if .Alert.Above}}
+        <input type="radio" name="direction" value="above" checked>
+      {{else}}
+        <input type="radio" name="direction" value="above">
+      {{end}}
+      above
+    </label>
+    <label>
+      {{if .Alert.Above}}
+        <input type="radio" name="direction" value="below">
+      {{else}}
+        <input type="radio" name="direction" value="below" checked>
+      {{end}}
+      below
+    </label>
+    <input type="text" pattern="^\d*(\.\d*)?$" name="value" value="{{.Alert.Value.String}}">
+    <select name="to">
+      {{range .ToCurrencyList}}
+        <option value="{{.ID}}"{{if eq .ID $alert.To.ID}} selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    <button>Submit</button>
+  </form>
+{{end}}

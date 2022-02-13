@@ -1,0 +1,15 @@
+body {
+  background-color: rgb(43 55 68);
+  color: white;
+}
+
+a {
+  color: white;
+}
+
+nav.main-nav {
+  margin-bottom: 1em;
+}
+
+main {
+}

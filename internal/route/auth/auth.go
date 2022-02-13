@@ -1,53 +1,27 @@
 package auth
 
 import (
-	"fmt"
-	"strings"
 	"net/http"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
+	"github.com/w0rp/pricewarp/internal/template"
 	"github.com/w0rp/pricewarp/internal/database"
 	"github.com/w0rp/pricewarp/internal/route/util"
 )
 
-var htmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<title>Pricewarp</title>
-	</head>
-	<body>
-		{htmlBody}
-	</body>
-</html>
-`
+type LoginFormData struct {
+	ErrorMessage string
+}
 
 func HandleViewLoginForm(writer http.ResponseWriter, request *http.Request) {
-	loginFormBody := `
-		<p>Log in!</p>
-		{errorMessage}
-		<form method="post">
-			<label>
-				Username:
-				<input type="text" name="username">
-			</label>
-			<label>
-				Password:
-				<input type="password" name="password">
-			</label>
-			<input type="submit" value="Submit">
-		</form>`
-
-	errorMessage := ""
+	data := LoginFormData{}
 
 	if request.Method == "POST" {
-		errorMessage = "<p>Invalid login!</p>"
+		data.ErrorMessage = "Invalid login!"
 	}
 
-	pageHtmlTemplate := strings.Replace(htmlTemplate, "{htmlBody}", loginFormBody, 1)
-	html := strings.Replace(pageHtmlTemplate, "{errorMessage}", errorMessage, 1)
-	fmt.Fprint(writer, html)
+	template.Render(template.Login, writer, data)
 }
 
 func HandleLogin(writer http.ResponseWriter, request *http.Request) {

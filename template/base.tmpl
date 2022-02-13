@@ -1,0 +1,19 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Pricewarp</title>
+    <link rel="stylesheet" href="/static/main.css" />
+  </head>
+  <body>
+    <nav class="main-nav">
+      <button id="logout" type="button">Logout</button>
+    </nav>
+    <main>
+      {{template "main" .}}
+    </main>
+    <script src="/static/main.js"></script>
+  </body>
+</html>
+{{end}}
