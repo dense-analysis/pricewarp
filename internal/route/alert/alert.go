@@ -2,7 +2,6 @@
 package alert
 
 import (
-	"fmt"
 	"strconv"
 	"net/http"
 	"github.com/shopspring/decimal"
@@ -12,13 +11,6 @@ import (
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/route/util"
-)
-
-type FallbackUserOption bool
-
-const (
-	RedirectIfNoUser FallbackUserOption = false
-	ForbiddenIfNoUser                   = true
 )
 
 var alertQuery = `
@@ -85,14 +77,6 @@ func loadAlertList(conn *database.Conn, userID int, alertList *[]model.Alert) er
 }
 
 func loadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error {
-	conn, err := database.Connect()
-
-	if err != nil {
-		return err
-	}
-
-	defer conn.Close()
-
 	*currencyList = make([]model.Currency, 0, 500)
 
 	rows, err := conn.Query(currencyQuery + "order by name")
@@ -114,28 +98,16 @@ func loadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error
 	return nil
 }
 
-func requireUser(writer http.ResponseWriter, request *http.Request, fallback FallbackUserOption) *model.User {
-	user, err := session.LoadUserFromSession(request)
+func loadUser(conn *database.Conn, writer http.ResponseWriter, request *http.Request, user *model.User) bool {
+	found, err := session.LoadUserFromSession(conn, request, user)
 
 	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, "database connection error\n")
+		util.RespondInternalServerError(writer, err)
 
-		return nil
+		return false
 	}
 
-	if user != nil {
-		return user
-	}
-
-	if fallback == RedirectIfNoUser {
-		http.Redirect(writer, request, "/login", http.StatusFound)
-	} else {
-		writer.WriteHeader(http.StatusForbidden)
-		fmt.Fprintf(writer, "403: Forbidden\n")
-	}
-
-	return nil
+	return found
 }
 
 type AlertPageData struct {
@@ -149,25 +121,16 @@ type AlertListPageData struct {
 	AlertList []model.Alert
 }
 
-func HandleAlertList(writer http.ResponseWriter, request *http.Request) {
-	user := requireUser(writer, request, RedirectIfNoUser)
-
-	if user == nil {
-		return
-	}
-
+func HandleAlertList(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+	var user model.User
 	data := AlertListPageData{}
 	data.Alert.Above = true
 
-	conn, err := database.Connect()
-
-	if err != nil {
-		util.RespondInternalServerError(writer, err)
+	if !loadUser(conn, writer, request, &user) {
+		http.Redirect(writer, request, "/login", http.StatusFound)
 
 		return
 	}
-
-	defer conn.Close()
 
 	if err := loadAlertList(conn, user.ID, &data.AlertList); err != nil {
 		util.RespondInternalServerError(writer, err)
@@ -182,17 +145,16 @@ func HandleAlertList(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	data.ToCurrencyList = data.FromCurrencyList
-
 	template.Render(template.AlertList, writer, data)
 }
 
-func loadAlertForRequest(writer http.ResponseWriter, request *http.Request, alert *model.Alert) bool {
-	user := requireUser(writer, request, RedirectIfNoUser)
-
-	if user == nil {
-		return false
-	}
-
+func loadAlertForRequest(
+	conn *database.Conn,
+	writer http.ResponseWriter,
+	request *http.Request,
+	user *model.User,
+	alert *model.Alert,
+) bool {
 	alertID, err := strconv.Atoi(mux.Vars(request)["id"])
 
 	if err != nil {
@@ -200,10 +162,6 @@ func loadAlertForRequest(writer http.ResponseWriter, request *http.Request, aler
 
 		return false
 	}
-
-	conn, err := database.Connect()
-
-	defer conn.Close()
 
 	row := conn.QueryRow(alertQuery + " where user_id = $1 and crypto_alert.id = $2", user.ID, alertID)
 
@@ -220,42 +178,33 @@ func loadAlertForRequest(writer http.ResponseWriter, request *http.Request, aler
 	return true
 }
 
-func HandleAlert(writer http.ResponseWriter, request *http.Request) {
-	user := requireUser(writer, request, RedirectIfNoUser)
-
-	if user == nil {
-		return
-	}
-
+func HandleAlert(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+	var user model.User
 	data := AlertPageData{}
 	data.Alert.Above = true
 
-	if !loadAlertForRequest(writer, request, &data.Alert) {
-		return
-	}
-
-	conn, err := database.Connect()
-
-	if err != nil {
-		util.RespondInternalServerError(writer, err)
+	if !loadUser(conn, writer, request, &user) {
+		http.Redirect(writer, request, "/login", http.StatusFound)
 
 		return
 	}
 
-	defer conn.Close()
-
-	if err := loadCurrencyList(conn, &data.FromCurrencyList); err != nil {
-		util.RespondInternalServerError(writer, err)
-
-		return
+	if loadAlertForRequest(conn, writer, request, &user, &data.Alert) {
+		if err := loadCurrencyList(conn, &data.FromCurrencyList); err != nil {
+			util.RespondInternalServerError(writer, err)
+		} else {
+			data.ToCurrencyList = data.FromCurrencyList
+			template.Render(template.AlertList, writer, data)
+		}
 	}
-
-	data.ToCurrencyList = data.FromCurrencyList
-
-	template.Render(template.AlertList, writer, data)
 }
 
-func loadAlertFromRequest(alert *model.Alert, writer http.ResponseWriter, request *http.Request) bool {
+func loadAlertFromForm(
+	conn *database.Conn,
+	writer http.ResponseWriter,
+	request *http.Request,
+	alert *model.Alert,
+) bool {
 	var err error
 	request.ParseForm()
 
@@ -307,16 +256,6 @@ func loadAlertFromRequest(alert *model.Alert, writer http.ResponseWriter, reques
 
 	var row database.Row
 
-	conn, err := database.Connect()
-
-	if err != nil {
-		util.RespondInternalServerError(writer, err)
-
-		return false
-	}
-
-	defer conn.Close()
-
 	row = conn.QueryRow(currencyQuery + "where id = $1", from)
 
 	if err := ScanCurrency(row, &alert.From); err != nil {
@@ -336,49 +275,41 @@ func loadAlertFromRequest(alert *model.Alert, writer http.ResponseWriter, reques
 	return true
 }
 
-func HandleSubmitAlert(writer http.ResponseWriter, request *http.Request) {
-	user := requireUser(writer, request, ForbiddenIfNoUser)
+func HandleSubmitAlert(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+	var user model.User
+	var alert model.Alert
 
-	if user == nil {
+	if !loadUser(conn, writer, request, &user) {
+		util.RespondForbidden(writer)
+
 		return
 	}
 
-	var alert model.Alert
-
-	if loadAlertFromRequest(&alert, writer, request) {
+	if loadAlertFromForm(conn, writer, request, &alert) {
 		insertSQL := `
 		insert into crypto_alert(user_id, above, time, sent, value, "from", "to")
 		values ($1, $2, NOW(), false, $3, $4, $5)
 		`
 
-		conn, err := database.Connect()
-
-		if err != nil {
-			util.RespondInternalServerError(writer, err)
-
-			return
-		}
-
-		defer conn.Close()
-
 		if err := conn.Exec(insertSQL, user.ID, alert.Above, alert.Value, alert.From.ID, alert.To.ID); err != nil {
 			util.RespondInternalServerError(writer, err)
-
-			return
+		} else {
+			http.Redirect(writer, request, "/alert", http.StatusFound)
 		}
-
-		http.Redirect(writer, request, "/alert", http.StatusFound)
 	}
 }
 
-func HandleUpdateAlert(writer http.ResponseWriter, request *http.Request) {
+func HandleUpdateAlert(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+	var user model.User
 	var alert model.Alert
 
-	if !loadAlertForRequest(writer, request, &alert) {
+	if !loadUser(conn, writer, request, &user) {
+		util.RespondForbidden(writer)
+
 		return
 	}
 
-	if loadAlertFromRequest(&alert, writer, request) {
+	if loadAlertForRequest(conn, writer, request, &user, &alert) && loadAlertFromForm(conn, writer, request, &alert) {
 		updateSQL := `
 		update crypto_alert
 		set above = $2,
@@ -390,50 +321,29 @@ func HandleUpdateAlert(writer http.ResponseWriter, request *http.Request) {
 		where id = $1
 		`
 
-		conn, err := database.Connect()
-
-		if err != nil {
-			util.RespondInternalServerError(writer, err)
-
-			return
-		}
-
-		defer conn.Close()
-
 		if err := conn.Exec(updateSQL, alert.ID, alert.Above, alert.Value, alert.From.ID, alert.To.ID); err != nil {
 			util.RespondInternalServerError(writer, err)
-
-			return
+		} else {
+			http.Redirect(writer, request, "/alert", http.StatusFound)
 		}
-
-		http.Redirect(writer, request, "/alert", http.StatusFound)
 	}
 }
 
-func HandleDeleteAlert(writer http.ResponseWriter, request *http.Request) {
+func HandleDeleteAlert(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+	var user model.User
 	var alert model.Alert
 
-	if !loadAlertForRequest(writer, request, &alert) {
-		return
-	}
-
-	conn, err := database.Connect()
-
-	if err != nil {
-		util.RespondInternalServerError(writer, err)
+	if !loadUser(conn, writer, request, &user) {
+		util.RespondForbidden(writer)
 
 		return
 	}
 
-	defer conn.Close()
-
-	err = conn.Exec("delete from crypto_alert where id = $1", alert.ID)
-
-	if err != nil {
-		util.RespondInternalServerError(writer, err)
-
-		return
+	if loadAlertForRequest(conn, writer, request, &user, &alert) {
+		if err := conn.Exec("delete from crypto_alert where id = $1", alert.ID); err != nil {
+			util.RespondInternalServerError(writer, err)
+		} else {
+			writer.WriteHeader(http.StatusNoContent)
+		}
 	}
-
-	writer.WriteHeader(http.StatusNoContent)
 }

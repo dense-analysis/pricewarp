@@ -24,22 +24,15 @@ func InitSessionStorage() {
 	sessionStore = sessions.NewCookieStore([]byte(secretKey))
 }
 
-func LoadUserFromSession(request *http.Request) (*model.User, error) {
+func LoadUserFromSession(conn *database.Conn, request *http.Request, user *model.User) (bool, error) {
 	session, sessionError := sessionStore.Get(request, "sessionid")
 
 	if sessionError != nil {
-		return nil, nil
+		// Ignore session errors, treat them as users not being found.
+		return false, nil
 	}
 
 	if userID, ok := session.Values["userID"].(int); ok {
-		conn, connectionErr := database.Connect()
-
-		if connectionErr != nil {
-			return nil, connectionErr
-		}
-
-		defer conn.Close()
-
 		row := conn.QueryRow(
 			"select username from crypto_user where id = $1",
 			userID,
@@ -47,12 +40,20 @@ func LoadUserFromSession(request *http.Request) (*model.User, error) {
 
 		var username string
 
-		if err := row.Scan(&username); err == nil {
-			return &model.User{ID: userID, Username: username}, nil
+		if err := row.Scan(&username); err != nil {
+			if err == database.ErrNoRows {
+				return false, nil
+			}
+
+			return false, err
 		}
+
+		*user = model.User{ID: userID, Username: username}
+
+		return true, nil
 	}
 
-	return nil, nil
+	return false, nil
 }
 
 func SaveUserInSession(writer http.ResponseWriter, request *http.Request, user *model.User) error {

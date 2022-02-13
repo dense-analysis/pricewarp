@@ -7,7 +7,6 @@ import (
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/template"
 	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/route/util"
 )
 
 type LoginFormData struct {
@@ -24,20 +23,10 @@ func HandleViewLoginForm(writer http.ResponseWriter, request *http.Request) {
 	template.Render(template.Login, writer, data)
 }
 
-func HandleLogin(writer http.ResponseWriter, request *http.Request) {
+func HandleLogin(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
 	request.ParseForm()
 	username := request.Form.Get("username")
 	password := request.Form.Get("password")
-
-	conn, connectionErr := database.Connect()
-
-	if connectionErr != nil {
-		util.RespondInternalServerError(writer, connectionErr)
-
-		return
-	}
-
-	defer conn.Close()
 
 	var userID int
 	loginValid := false

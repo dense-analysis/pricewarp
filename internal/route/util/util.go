@@ -21,3 +21,8 @@ func RespondNotFound(writer http.ResponseWriter) {
 	writer.WriteHeader(http.StatusNotFound)
 	fmt.Fprintf(writer, "404: Not Found\n")
 }
+
+func RespondForbidden(writer http.ResponseWriter) {
+	writer.WriteHeader(http.StatusForbidden)
+	fmt.Fprintf(writer, "403: Forbidden\n")
+}

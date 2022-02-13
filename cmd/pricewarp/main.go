@@ -6,34 +6,46 @@ import (
 	"context"
 	"syscall"
 	"log"
-	"fmt"
 	"time"
 	"net/http"
 	"github.com/gorilla/mux"
 	"github.com/w0rp/pricewarp/internal/env"
+	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/template"
+	"github.com/w0rp/pricewarp/internal/route/util"
 	"github.com/w0rp/pricewarp/internal/route/auth"
 	"github.com/w0rp/pricewarp/internal/route/alert"
 )
 
-func handleIndex(writer http.ResponseWriter, request *http.Request) {
-	user, err := session.LoadUserFromSession(request)
+func handleIndex(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+	var user model.User
+	found, err := session.LoadUserFromSession(conn, request, &user)
 
 	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, "database connection error\n")
-
-		return
-	}
-
-	if (user != nil) {
+		util.RespondInternalServerError(writer, err)
+	} else if found {
 		http.Redirect(writer, request, "/alert", http.StatusFound)
 	} else {
 		http.Redirect(writer, request, "/login", http.StatusFound)
 	}
 }
 
+func addDatabaseConnection(
+	f func(*database.Conn, http.ResponseWriter, *http.Request),
+) func(http.ResponseWriter, *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		conn, err := database.Connect()
+
+		if err != nil {
+			util.RespondInternalServerError(writer, err)
+		} else {
+			defer conn.Close()
+			f(conn, writer, request)
+		}
+	}
+}
 
 func main() {
 	env.LoadEnvironmentVariables()
@@ -42,15 +54,23 @@ func main() {
 
 	router := mux.NewRouter().StrictSlash(true)
 
-	router.HandleFunc("/", handleIndex).Methods("GET")
+	indexRoute := addDatabaseConnection(handleIndex)
+	postLoginRoute := addDatabaseConnection(auth.HandleLogin)
+	alertListRoute := addDatabaseConnection(alert.HandleAlertList)
+	alertCreateRoute := addDatabaseConnection(alert.HandleSubmitAlert)
+	alertRoute := addDatabaseConnection(alert.HandleAlert)
+	updateAlertRoute := addDatabaseConnection(alert.HandleUpdateAlert)
+	deleteAlertRoute := addDatabaseConnection(alert.HandleDeleteAlert)
+
+	router.HandleFunc("/", indexRoute).Methods("GET")
 	router.HandleFunc("/login", auth.HandleViewLoginForm).Methods("GET")
-	router.HandleFunc("/login", auth.HandleLogin).Methods("POST")
+	router.HandleFunc("/login", postLoginRoute).Methods("POST")
 	router.HandleFunc("/logout", auth.HandleLogout).Methods("POST")
-	router.HandleFunc("/alert", alert.HandleAlertList).Methods("GET")
-	router.HandleFunc("/alert", alert.HandleSubmitAlert).Methods("POST")
-	router.HandleFunc("/alert/{id}", alert.HandleAlert).Methods("GET")
-	router.HandleFunc("/alert/{id}", alert.HandleUpdateAlert).Methods("POST")
-	router.HandleFunc("/alert/{id}", alert.HandleDeleteAlert).Methods("DELETE")
+	router.HandleFunc("/alert", alertListRoute).Methods("GET")
+	router.HandleFunc("/alert", alertCreateRoute).Methods("POST")
+	router.HandleFunc("/alert/{id}", alertRoute).Methods("GET")
+	router.HandleFunc("/alert/{id}", updateAlertRoute).Methods("POST")
+	router.HandleFunc("/alert/{id}", deleteAlertRoute).Methods("DELETE")
 
 	// TODO: Only enable static files if a DEBUG flag is true
 	fileServer := http.FileServer(http.Dir("./static/"))
