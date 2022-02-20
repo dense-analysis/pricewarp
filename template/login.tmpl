@@ -5,14 +5,20 @@
       {{.ErrorMessage}}
     </div>
   {{end}}
-  <label>
-    Username:
-    <input type="text" name="username" autocomplete="on">
-  </label>
-  <label>
-    Password:
-    <input type="password" name="password" autocomplete="on">
-  </label>
-  <button>Submit</button>
+  <div class="field-wrapper">
+    <label>
+      Username:
+      <input type="text" name="username" autocomplete="on">
+    </label>
+  </div>
+  <div class="field-wrapper">
+    <label>
+      Password:
+      <input type="password" name="password" autocomplete="on">
+    </label>
+  </div>
+  <div class="field-wrapper">
+    <button>Submit</button>
+  </div>
 </form>
 {{end}}

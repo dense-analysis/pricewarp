@@ -10,6 +10,7 @@ import (
 )
 
 type LoginFormData struct {
+	User *model.User
 	ErrorMessage string
 }
 

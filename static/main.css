@@ -1,15 +1,118 @@
-body {
-  background-color: rgb(43 55 68);
-  color: white;
+* {
+  font-family: sans-serif;
 }
 
 a {
   color: white;
 }
 
-nav.main-nav {
+button, .button {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: rgb(50, 65, 80);
+  color: rgb(231, 232, 233);
+  border-style: solid;
+  border-width: 2px;
+  border-color: rgb(118, 118, 118);
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 12pt;
+  margin-right: 0.25em;
+}
+
+button.secondary, .button.secondary {
+  background-color: rgb(81, 88, 94);
+}
+
+button.danger, .button.danger {
+  background-color: rgb(94, 64, 64);
+}
+
+input, select {
+  background-color: rgb(46, 55, 64);
+  color: rgb(231, 232, 233);
+  padding: 8px;
+  border-style: solid;
+  border-width: 2px;
+  border-color: rgb(118, 118, 118);
+  font-size: 12pt;
+}
+
+body {
+  background-color: rgb(46, 55, 64);
+  color: rgb(231, 232, 233);
+  margin: 0;
+  font-size: 12pt;
+}
+
+header {
+  background-color: rgb(40, 50, 60);
   margin-bottom: 1em;
+  padding: 1em;
+  display: flex;
+  justify-content: flex-end;
+}
+
+header > h1 {
+  margin: 0 auto 0 0;
+}
+
+header > nav {
+}
+
+header {
+  margin: auto;
+  width: 768px;
 }
 
 main {
+  margin: auto;
+  width: 768px;
+  padding: 1em;
+}
+
+main {
+}
+
+form .field-wrapper {
+  margin-bottom: 1em;
+}
+
+form .field-wrapper input {
+  display: block;
+}
+
+.alert-form .field-wrapper input, .alert-form .field-wrapper select {
+  display: inline-block;
+}
+
+.alert-form input.price {
+  width: 5em;
+}
+
+.alert-table {
+  background-color: rgb(40, 50, 60);
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.alert-table tr td {
+  border-style: solid;
+  border-width: 2px 0 0 0;
+}
+
+.alert-table tr td {
+  padding: 0.5em 0.25em;
+}
+
+.alert-table .alert-description {
+  width: 100%;
+}
+
+.alert-table .alert-description.sent {
+  text-decoration: line-through;
+}
+
+.alert-table .alert-description .direction {
+  font-weight: bold;
 }

@@ -7,9 +7,14 @@
     <link rel="stylesheet" href="/static/main.css" />
   </head>
   <body>
-    <nav class="main-nav">
-      <button id="logout" type="button">Logout</button>
-    </nav>
+    <header>
+      <h1>Pricewarp</h1>
+      {{if .User}}
+        <nav>
+          <button class="secondary" id="logout" type="button">Logout</button>
+        </nav>
+      {{end}}
+    </header>
     <main>
       {{template "main" .}}
     </main>
