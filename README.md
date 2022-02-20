@@ -1,8 +1,7 @@
 # pricewarp
 
 This project sets up a self-serve cyrptocurrency price alert system to send
-emails when cryptocurrencies go above or below a certain price. _This is a work
-in progress._
+emails when cryptocurrencies go above or below a certain price.
 
 ## Installation
 
