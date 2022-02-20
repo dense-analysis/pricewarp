@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"net/mail"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
@@ -17,8 +18,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// TODO: Add email validation for username
 	username := os.Args[1]
+	_, err := mail.ParseAddress(username)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Username is not a valid email address.\n")
+		os.Exit(1)
+	}
+
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(os.Args[2]), 14)
 
 	if err != nil {
