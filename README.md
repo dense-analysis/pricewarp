@@ -58,6 +58,53 @@ should be run periodically to get the latest prices for cryptocurrencies.
 Run `bin/notify` to send price alert emails using the SMTP credentials set in
 the `.env` file.
 
+## Creating users
+
+Run `bin/adduser EMAIL PASSWORD` to add a user with a given email address and
+password. You should be able to log in to the site after the program completes
+successfully.
+
 ## Running the Server
 
-_TO DO_
+This section will describe running the server with nginx.
+
+Copy at least the contents of `bin` and `static` to a directory on a webserver,
+and set up nginx to serve your static content and work as a reverse proxy.
+
+```nginx
+server {
+    # ...
+
+    location /static {
+        include expires_headers;
+        root /your/dir;
+    }
+
+    location / {
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $http_host;
+        proxy_set_header REMOTE_ADDR $remote_addr;
+        proxy_redirect off;
+
+        # Use the port you're running the server with here.
+        proxy_pass http://localhost:8000/;
+    }
+}
+```
+
+You can set cron rules to start the server up on boot, and to periodically load
+price data and send email alerts.
+
+```cron
+@reboot cd /your/dir && bin/pricewarp &> server.log
+
+  55 *  *   *   *     cd /your/dir && bin/ingest
+  0  *  *   *   *     cd /your/dir && bin/notify
+```
+
+You could start your server right away with `nohup`.
+
+```bash
+nohup bin/pricewarp &> server.log &
+```
