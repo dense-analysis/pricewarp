@@ -139,11 +139,13 @@ func sendAlertEmails(alertList []*CryptoAlert) error {
 	}
 
 	for email, groupedList := range groupedAlerts {
-		message := `From: {from}
-Subject: Cryptocurrency Price Alert
-Content-Type: text/plain; charset="UTF-8"
+		message := `To: {to}
+From: {from}
+Subject: Price Alert
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
 
-The following cryptocurrencies are above or below your desired prices:
+Prices have changed recently:
 
 {priceString}
 `
@@ -165,6 +167,7 @@ The following cryptocurrencies are above or below your desired prices:
 			)
 		}
 
+		message = strings.Replace(message, "{to}", email, -1)
 		message = strings.Replace(message, "{from}", from, -1)
 		message = strings.Replace(message, "{priceString}", strings.Join(priceStringLines, "\n"), -1)
 
