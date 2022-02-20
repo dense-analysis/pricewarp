@@ -3,6 +3,10 @@
 This project sets up a self-serve cyrptocurrency price alert system to send
 emails when cryptocurrencies go above or below a certain price.
 
+![price alert list](https://user-images.githubusercontent.com/3518142/154852055-39d3111a-6582-4df0-9296-6b7d11068da7.png)
+![price alert form](https://user-images.githubusercontent.com/3518142/154852057-89e3120c-3712-40fd-9226-04fc40646246.png)
+![example email](https://user-images.githubusercontent.com/3518142/154852169-13587064-2b98-4aa3-a2c2-e85ec3013375.png)
+
 ## Installation
 
 1. Install Go 1.18
