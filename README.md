@@ -27,6 +27,9 @@ some_database=# GRANT ALL ON ALL TABLES IN SCHEMA public to some_user;
 Your `.env` file should look like so.
 
 ```
+DEBUG=true
+ADDRESS=:8000
+
 DB_USERNAME=some_user
 DB_PASSWORD=some_password
 DB_HOST=localhost
@@ -41,6 +44,9 @@ SMTP_PORT=465
 
 SESSION_SECRET=some_32_char_secret_cookie_value
 ```
+
+The `DEBUG` flag enables serving files from `/static` and other debugging
+information. This should be set to `false` in production.
 
 ## Loading Price Data
 

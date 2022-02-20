@@ -72,14 +72,21 @@ func main() {
 	router.HandleFunc("/alert/{id}", updateAlertRoute).Methods("POST")
 	router.HandleFunc("/alert/{id}", deleteAlertRoute).Methods("DELETE")
 
-	// TODO: Only enable static files if a DEBUG flag is true
-	fileServer := http.FileServer(http.Dir("./static/"))
-	router.PathPrefix("/static/").
-		Handler(http.StripPrefix("/static/", fileServer))
 
-	// TODO: Make port configurable
+	if os.Getenv("DEBUG") == "true" {
+		fileServer := http.FileServer(http.Dir("./static/"))
+		router.PathPrefix("/static/").
+			Handler(http.StripPrefix("/static/", fileServer))
+	}
+
+	address := os.Getenv("ADDRESS")
+
+	if len(address) == 0 {
+		address = ":8000"
+	}
+
 	server := http.Server{
-		Addr: ":8000",
+		Addr: address,
 		Handler: router,
 	}
 
