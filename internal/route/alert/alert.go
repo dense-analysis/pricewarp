@@ -34,7 +34,7 @@ inner join crypto_currency as to_currency
 on to_currency.id = crypto_alert."to"
 `
 
-func ScanAlert(row database.Row, alert *model.Alert) error {
+func scanAlert(row database.Row, alert *model.Alert) error {
 	return row.Scan(
 		&alert.ID,
 		&alert.Above,
@@ -52,51 +52,29 @@ func ScanAlert(row database.Row, alert *model.Alert) error {
 
 var currencyQuery = `select id, ticker, name from crypto_currency `
 
-func ScanCurrency(row database.Row, currency *model.Currency) error {
+func scanCurrency(row database.Row, currency *model.Currency) error {
 	return row.Scan(&currency.ID, &currency.Ticker, &currency.Name)
 }
 
 func loadAlertList(conn *database.Conn, userID int, alertList *[]model.Alert) error {
-	rows, err := conn.Query(alertQuery + "where user_id = $1 order by time", userID)
-
-	if err != nil {
-		return err
-	}
-
-	*alertList = make([]model.Alert, 0, 1)
-	var alert model.Alert
-
-	for rows.Next() {
-		if err := ScanAlert(rows, &alert); err != nil {
-			return err
-		}
-
-		*alertList = append(*alertList, alert)
-	}
-
-	return nil
+	return model.LoadList(
+		conn,
+		alertList,
+		1,
+		scanAlert,
+		alertQuery + "where user_id = $1 order by time",
+		userID,
+	)
 }
 
 func loadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error {
-	*currencyList = make([]model.Currency, 0, 500)
-
-	rows, err := conn.Query(currencyQuery + "order by name")
-
-	if err != nil {
-		return err
-	}
-
-	var currency model.Currency
-
-	for rows.Next() {
-		if err := ScanCurrency(rows, &currency); err != nil {
-			return err
-		}
-
-		*currencyList = append(*currencyList, currency)
-	}
-
-	return nil
+	return model.LoadList(
+		conn,
+		currencyList,
+		500,
+		scanCurrency,
+		currencyQuery + "order by name",
+	)
 }
 
 func loadUser(conn *database.Conn, writer http.ResponseWriter, request *http.Request, user *model.User) bool {
@@ -216,7 +194,7 @@ func loadAlertForRequest(
 
 	row := conn.QueryRow(alertQuery + " where user_id = $1 and crypto_alert.id = $2", user.ID, alertID)
 
-	if err := ScanAlert(row, alert); err != nil {
+	if err := scanAlert(row, alert); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
@@ -308,7 +286,7 @@ func loadAlertFromForm(
 
 	row = conn.QueryRow(currencyQuery + "where id = $1", from)
 
-	if err := ScanCurrency(row, &alert.From); err != nil {
+	if err := scanCurrency(row, &alert.From); err != nil {
 		util.RespondInternalServerError(writer, err)
 
 		return false
@@ -316,7 +294,7 @@ func loadAlertFromForm(
 
 	row = conn.QueryRow(currencyQuery + "where id = $1", to)
 
-	if err := ScanCurrency(row, &alert.To); err != nil {
+	if err := scanCurrency(row, &alert.To); err != nil {
 		util.RespondInternalServerError(writer, err)
 
 		return false

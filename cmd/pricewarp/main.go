@@ -67,9 +67,9 @@ func main() {
 
 	portfolioListRoute := addDatabaseConnection(portfolio.HandlePortfolioList)
 	portfolioUpdateRoute := addDatabaseConnection(portfolio.HandlePortfolioUpdate)
-	portfolioBuyRoute := addDatabaseConnection(portfolio.HandlePortfolioBuy)
-	portfolioSellRoute := addDatabaseConnection(portfolio.HandlePortfolioSell)
-	portfolioAssetRoute := addDatabaseConnection(portfolio.HandlePortfolioAsset)
+	portfolioAssetRoute := addDatabaseConnection(portfolio.HandleAsset)
+	portfolioBuyRoute := addDatabaseConnection(portfolio.HandleAssetBuy)
+	portfolioSellRoute := addDatabaseConnection(portfolio.HandleAssetSell)
 
 	router.HandleFunc("/", indexRoute).Methods("GET")
 	router.HandleFunc("/login", auth.HandleViewLoginForm).Methods("GET")
@@ -82,9 +82,9 @@ func main() {
 	router.HandleFunc("/alert/{id}", deleteAlertRoute).Methods("DELETE")
 	router.HandleFunc("/portfolio", portfolioListRoute).Methods("GET")
 	router.HandleFunc("/portfolio", portfolioUpdateRoute).Methods("POST")
-	router.HandleFunc("/portfolio/{id}", portfolioAssetRoute).Methods("GET")
-	router.HandleFunc("/portfolio/{id}/buy", portfolioBuyRoute).Methods("POST")
-	router.HandleFunc("/portfolio/{id}/sell", portfolioSellRoute).Methods("POST")
+	router.HandleFunc("/portfolio/{ticker}", portfolioAssetRoute).Methods("GET")
+	router.HandleFunc("/portfolio/{ticker}/buy", portfolioBuyRoute).Methods("POST")
+	router.HandleFunc("/portfolio/{ticker}/sell", portfolioSellRoute).Methods("POST")
 
 	if os.Getenv("DEBUG") == "true" {
 		fileServer := http.FileServer(http.Dir("./static/"))

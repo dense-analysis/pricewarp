@@ -74,19 +74,19 @@ func (conn *Conn) Close() {
 }
 
 // Exec executes a database query
-func (conn *Conn) Exec(sql string, arguments ...interface{}) error {
+func (conn *Conn) Exec(sql string, arguments ...any) error {
 	_, err := conn.pgxConn.Exec(context.Background(), sql, arguments...)
 
 	return err
 }
 
-// QueryRow executes a database query
-func (conn *Conn) Query(sql string, arguments ...interface{}) (Rows, error) {
+// Query executes a database query
+func (conn *Conn) Query(sql string, arguments ...any) (Rows, error) {
 	return conn.pgxConn.Query(context.Background(), sql, arguments...)
 }
 
 // QueryRow executes a database query returning Row data
-func (conn *Conn) QueryRow(sql string, arguments ...interface{}) Row {
+func (conn *Conn) QueryRow(sql string, arguments ...any) Row {
 	return conn.pgxConn.QueryRow(context.Background(), sql, arguments...)
 }
 
@@ -96,7 +96,7 @@ func (conn *Conn) SendBatch(batch *Batch) BatchResults {
 }
 
 // CopyFrom copies rows into a database.
-func (conn *Conn) CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error) {
+func (conn *Conn) CopyFrom(tableName string, columNames []string, rows [][]any) (int64, error) {
 	return conn.pgxConn.CopyFrom(context.Background(), pgx.Identifier{tableName}, columNames, pgx.CopyFromRows(rows))
 }
 
@@ -122,19 +122,19 @@ func (tx *Tx) Rollback() error {
 }
 
 // Exec executes a database query
-func (tx *Tx) Exec(sql string, arguments ...interface{}) error {
+func (tx *Tx) Exec(sql string, arguments ...any) error {
 	_, err := tx.pgxTx.Exec(context.Background(), sql, arguments...)
 
 	return err
 }
 
-// QueryRow executes a database query
-func (tx *Tx) Query(sql string, arguments ...interface{}) (Rows, error) {
+// Query executes a database query
+func (tx *Tx) Query(sql string, arguments ...any) (Rows, error) {
 	return tx.pgxTx.Query(context.Background(), sql, arguments...)
 }
 
 // QueryRow executes a database query returning Row data
-func (tx *Tx) QueryRow(sql string, arguments ...interface{}) Row {
+func (tx *Tx) QueryRow(sql string, arguments ...any) Row {
 	return tx.pgxTx.QueryRow(context.Background(), sql, arguments...)
 }
 
@@ -146,4 +146,18 @@ func (tx *Tx) SendBatch(batch *Batch) BatchResults {
 // CopyFrom copies rows into a database.
 func (tx *Tx) CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error) {
 	return tx.pgxTx.CopyFrom(context.Background(), pgx.Identifier{tableName}, columNames, pgx.CopyFromRows(rows))
+}
+
+// Queryable defines an interface for either a connection or a transaction
+type Queryable interface {
+	// Exec executes a database query
+	Exec(sql string, arguments ...any) error
+	// QueryRow executes a database query
+	Query(sql string, arguments ...any) (Rows, error)
+	// QueryRow executes a database query returning Row data
+	QueryRow(sql string, arguments ...any) Row
+	// SendBatch send a series of queries in a batch.
+	SendBatch(batch *Batch) BatchResults
+	// CopyFrom copies rows into a database.
+	CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error)
 }
