@@ -11,6 +11,14 @@ import (
 	"net/http"
 )
 
+// TrackedAsset is an Asset with additional information available to it.
+type TrackedAsset struct {
+	model.Asset
+	Value decimal.Decimal
+	ShareOfPortfolio decimal.Decimal
+	Performance decimal.Decimal
+}
+
 var portfolioQuery = `
 select
 	currency.id,
@@ -75,25 +83,140 @@ func scanAsset(row database.Row, asset *model.Asset) error {
 	)
 }
 
-func loadAssetList(conn *database.Conn, userID int, assetList *[]model.Asset) error {
+func scanTrackedAsset(row database.Row, asset *TrackedAsset) error {
+	return scanAsset(row, &asset.Asset)
+}
+
+func loadAssetList(conn *database.Conn, userID int, assetList *[]TrackedAsset) error {
 	return model.LoadList(
 		conn,
 		assetList,
 		1,
-		scanAsset,
+		scanTrackedAsset,
 		assetQuery + "where user_id = $1 order by time",
 		userID,
 	)
 }
 
-func loadAsset(conn *database.Conn, userID int, ticker string, asset *model.Asset) error {
-	row := conn.QueryRow(
-		optionalAssetQuery + " where asset.user_id = $1 and currency.ticker = $2",
-		userID,
-		ticker,
-	)
+var priceQuery = `
+select distinct on("from", "to")
+	from_currency.id,
+	from_currency.ticker,
+	from_currency.name,
+	to_currency.id,
+	to_currency.ticker,
+	to_currency.name,
+	time,
+	value
+from crypto_price
+inner join crypto_currency as from_currency
+on from_currency.id = crypto_price."from"
+inner join crypto_currency as to_currency
+on to_currency.id = crypto_price."to"
+`
 
-	return scanAsset(row, asset)
+func scanPrice(row database.Row, price *model.Price) error {
+	return row.Scan(
+		&price.From.ID,
+		&price.From.Ticker,
+		&price.From.Name,
+		&price.To.ID,
+		&price.To.Ticker,
+		&price.To.Name,
+		&price.Time,
+		&price.Value,
+	)
+}
+
+func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []string, priceList *[]model.Price) error {
+	if len(tickerList) == 0 {
+		*priceList = nil
+
+		return nil
+	}
+
+	return model.LoadList(
+		conn,
+		priceList,
+		len(tickerList) * 2,
+		scanPrice,
+		priceQuery + `
+			where from_currency.ticker = ANY($1)
+			and (to_currency.id = $2 or to_currency.ticker = 'BTC')"
+			order by "from" desc, "to" desc, time desc;
+		`,
+		tickerList,
+		currency.ID,
+	)
+}
+
+func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []TrackedAsset) error {
+	tickerList := make([]string, 0, len(assetList) + 1)
+	tickerList = append(tickerList, "BTC")
+
+	for _, asset := range assetList {
+		tickerList = append(tickerList, asset.Currency.Ticker)
+	}
+
+	var priceList []model.Price
+
+	if err := loadPriceList(conn, currency, tickerList, &priceList); err != nil {
+		return err
+	}
+
+	btcPrices := map[string]decimal.Decimal{}
+	currencyPrices := map[string]decimal.Decimal{}
+
+	for _, price := range priceList {
+		if price.To.ID == currency.ID {
+			currencyPrices[price.From.Ticker] = price.Value
+		} else {
+			btcPrices[price.From.Ticker] = price.Value
+		}
+	}
+
+	for _, asset := range assetList {
+		if multiplier, ok := currencyPrices[asset.Currency.Ticker]; ok {
+			// Conversion from a currency to fiat directly.
+			asset.Value = asset.Amount.Mul(multiplier)
+		} else if toBtcMultiplier, ok := btcPrices[asset.Currency.Ticker]; ok {
+			// Conversion from a currency to fiat via Bitcoin.
+			if btcToCurrencyMultiplier, ok := currencyPrices["BTC"]; ok {
+				asset.Value = asset.Amount.Mul(toBtcMultiplier).Mul(btcToCurrencyMultiplier)
+			} else {
+				asset.Value = decimal.Zero
+			}
+		} else {
+			asset.Value = decimal.Zero
+		}
+	}
+
+	totalValue := decimal.Zero
+
+	for _, asset := range assetList {
+		totalValue = totalValue.Add(asset.Value)
+	}
+
+	one := decimal.New(1, 1)
+	hundred := decimal.New(100, 1)
+
+	for _, asset := range assetList {
+		// The share of the portofolio is the value over the total value
+		if totalValue.IsZero() {
+			asset.ShareOfPortfolio = decimal.Zero
+		} else {
+			asset.ShareOfPortfolio = asset.Value.Div(totalValue).Mul(hundred)
+		}
+
+		// Calculate percentage gains per asset
+		if asset.Purchased.IsZero() {
+			asset.Performance = decimal.Zero
+		} else {
+			asset.Performance = asset.Value.Div(asset.Purchased).Sub(one).Mul(hundred)
+		}
+	}
+
+	return nil
 }
 
 var assetUpdateQuery = `
@@ -189,7 +312,9 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 
 type PortfolioListPageData struct {
 	PortfolioPageData
-	AssetList []model.Asset
+	AssetList []TrackedAsset
+	TotalValue decimal.Decimal
+	AveragePerformance decimal.Decimal
 }
 
 // HandlePortfolioList shows the assets and cash a user has.
@@ -217,9 +342,31 @@ func HandlePortfolioList(conn *database.Conn, writer http.ResponseWriter, reques
 
 			return
 		}
+
+		if err := loadAssetPrices(conn, &data.Portfolio.Currency, data.AssetList); err != nil {
+			util.RespondInternalServerError(writer, err)
+
+			return
+		}
+
+		data.TotalValue = decimal.Zero
+		totalPurchased := decimal.Zero
+
+		for _, asset := range data.AssetList {
+			data.TotalValue = data.TotalValue.Add(asset.Value)
+			totalPurchased = totalPurchased.Add(asset.Purchased)
+		}
+
+		if totalPurchased.IsZero() {
+			data.AveragePerformance = decimal.Zero
+		} else {
+			data.AveragePerformance = data.TotalValue.
+				Div(totalPurchased).
+				Sub(decimal.New(1, 1)).
+				Mul(decimal.New(100, 1))
+		}
 	}
 
-	// TODO: Augment asset list with calculated price data
 	// TODO: Render template.
 }
 
@@ -256,7 +403,13 @@ func loadAssetAdjustFormData(
 
 	asset := model.Asset{}
 
-	if err := loadAsset(conn, data.User.ID, ticker, &asset); err != nil {
+	row := conn.QueryRow(
+		optionalAssetQuery + " where asset.user_id = $1 and currency.ticker = $2",
+		data.User.ID,
+		ticker,
+	)
+
+	if err := scanAsset(row, &asset); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
@@ -379,7 +532,7 @@ func HandleAssetSell(conn *database.Conn, writer http.ResponseWriter, request *h
 
 type AssetPageData struct {
 	PortfolioPageData
-	Asset model.Asset
+	Asset TrackedAsset
 }
 
 // HandleAsset displays the details for a single Cryptocurrency asset.
@@ -404,7 +557,15 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 
 	ticker := mux.Vars(request)["ticker"]
 
-	if err := loadAsset(conn, data.User.ID, ticker, &data.Asset); err != nil {
+	row := conn.QueryRow(
+		optionalAssetQuery + " where asset.user_id = $1 and currency.ticker = $2",
+		data.User.ID,
+		ticker,
+	)
+
+	assetList := make([]TrackedAsset, 1)
+
+	if err := scanTrackedAsset(row, &assetList[0]); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
@@ -414,6 +575,13 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 		return
 	}
 
-	// TODO: Augment asset with calculated price data
+	if err := loadAssetPrices(conn, &data.Portfolio.Currency, assetList); err != nil {
+		util.RespondInternalServerError(writer, err)
+
+		return
+	}
+
+	data.Asset = assetList[0]
+
 	// TODO: Render template.
 }

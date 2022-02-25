@@ -18,6 +18,14 @@ type Currency struct {
 	Name string
 }
 
+// Price represents a price in the database
+type Price struct {
+	From Currency
+	To Currency
+	Time time.Time
+	Value decimal.Decimal
+}
+
 // Alert represents an alert configured by a user
 type Alert struct {
 	ID int
