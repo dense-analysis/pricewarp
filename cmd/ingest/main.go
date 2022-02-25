@@ -182,8 +182,14 @@ func main() {
 
 	prices := readPrices(tickerResults)
 
-	transaction, _ := conn.Begin()
-	defer transaction.Commit()
+	transaction, err := conn.Begin()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "SQL error: %s\n", err)
+		os.Exit(1)
+	}
+
+	defer transaction.Rollback()
 
 	err = writeCurrencies(transaction, prices)
 
@@ -198,4 +204,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "SQL error: %s\n", err)
 		os.Exit(1)
 	}
+
+	transaction.Commit()
 }
