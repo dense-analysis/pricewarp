@@ -17,6 +17,7 @@ import (
 	"github.com/w0rp/pricewarp/internal/route/util"
 	"github.com/w0rp/pricewarp/internal/route/auth"
 	"github.com/w0rp/pricewarp/internal/route/alert"
+	"github.com/w0rp/pricewarp/internal/route/portfolio"
 )
 
 func handleIndex(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
@@ -55,12 +56,20 @@ func main() {
 	router := mux.NewRouter().StrictSlash(true)
 
 	indexRoute := addDatabaseConnection(handleIndex)
+
 	postLoginRoute := addDatabaseConnection(auth.HandleLogin)
+
 	alertListRoute := addDatabaseConnection(alert.HandleAlertList)
 	alertCreateRoute := addDatabaseConnection(alert.HandleSubmitAlert)
 	alertRoute := addDatabaseConnection(alert.HandleAlert)
 	updateAlertRoute := addDatabaseConnection(alert.HandleUpdateAlert)
 	deleteAlertRoute := addDatabaseConnection(alert.HandleDeleteAlert)
+
+	portfolioListRoute := addDatabaseConnection(portfolio.HandlePortfolioList)
+	portfolioUpdateRoute := addDatabaseConnection(portfolio.HandlePortfolioUpdate)
+	portfolioBuyRoute := addDatabaseConnection(portfolio.HandlePortfolioBuy)
+	portfolioSellRoute := addDatabaseConnection(portfolio.HandlePortfolioSell)
+	portfolioAssetRoute := addDatabaseConnection(portfolio.HandlePortfolioAsset)
 
 	router.HandleFunc("/", indexRoute).Methods("GET")
 	router.HandleFunc("/login", auth.HandleViewLoginForm).Methods("GET")
@@ -71,7 +80,11 @@ func main() {
 	router.HandleFunc("/alert/{id}", alertRoute).Methods("GET")
 	router.HandleFunc("/alert/{id}", updateAlertRoute).Methods("POST")
 	router.HandleFunc("/alert/{id}", deleteAlertRoute).Methods("DELETE")
-
+	router.HandleFunc("/portfolio", portfolioListRoute).Methods("GET")
+	router.HandleFunc("/portfolio", portfolioUpdateRoute).Methods("POST")
+	router.HandleFunc("/portfolio/{id}", portfolioAssetRoute).Methods("GET")
+	router.HandleFunc("/portfolio/{id}/buy", portfolioBuyRoute).Methods("POST")
+	router.HandleFunc("/portfolio/{id}/sell", portfolioSellRoute).Methods("POST")
 
 	if os.Getenv("DEBUG") == "true" {
 		fileServer := http.FileServer(http.Dir("./static/"))
