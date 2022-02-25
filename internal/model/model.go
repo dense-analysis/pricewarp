@@ -28,3 +28,16 @@ type Alert struct {
 	Time time.Time
 	Sent bool
 }
+
+// Portfolio represents portfolio data for a user
+type Portfolio struct {
+	Currency Currency
+	Cash decimal.Decimal
+}
+
+// Asset represents the value and purchased amount of a crypto asset
+type Asset struct {
+	Currency Currency
+	Purchased decimal.Decimal
+	Amount decimal.Decimal
+}
