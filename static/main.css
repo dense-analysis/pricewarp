@@ -1,6 +1,17 @@
-* {
+/* CSS Resets */
+
+html {
+  box-sizing: border-box;
   font-family: sans-serif;
+  overflow-y: scroll;  /* For Firefox, etc. */
+  overflow-y: overlay; /* For Chrome, etc. */
 }
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+/* General element styles */
 
 a {
   color: white;
@@ -38,6 +49,8 @@ input, select {
   font-size: 12pt;
 }
 
+/* Body and navigation */
+
 body {
   background-color: rgb(46, 55, 64);
   color: rgb(231, 232, 233);
@@ -48,44 +61,60 @@ body {
 header {
   background-color: rgb(40, 50, 60);
   margin-bottom: 1em;
-  padding: 1em;
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin: 0 auto;
+  padding: 1em 1em 0 1em;
+  max-width: 768px;
 }
 
 header > h1 {
-  margin: 0 auto 0 0;
+  margin: 0 auto 0.5em 0;
 }
 
-header > nav {
+header > nav > * {
+  margin-bottom: 0.5em;
 }
 
-header {
+.breadcrumbs {
+  padding: 1em;
+  max-width: 768px;
   margin: auto;
-  width: 768px;
+  background-color: rgb(40, 50, 60);
+}
+
+.breadcrumbs > .crumb {
+  padding: 0px;
+}
+
+.breadcrumbs > .crumb:after {
+  padding-left: 8px;
+  content: ">"
+}
+
+.breadcrumbs > .crumb:last-child:after {
+  padding-left: 0px;
+  content: ""
 }
 
 main {
   margin: auto;
-  width: 768px;
+  max-width: 768px;
   padding: 1em;
 }
 
-main {
-}
+/* form styles */
 
-.template-alert {
-  padding: 0.5em;
-  background: rgb(225, 225, 225);
-  color: rgb(211, 0, 0);
-  border-color: rgb(100, 100, 100);
-  border-style: solid;
-  border-width: 10px;
-  font-size: 200%;
+table + form {
+  margin-top: 1em;
 }
 
 form .field-wrapper {
-  margin-bottom: 1em;
+  margin-bottom: 0.25em;
+}
+
+form .field-wrapper input, form .field-wrapper select, form .field-wrapper button {
+  margin-bottom: 0.5em;
 }
 
 form .field-wrapper input {
@@ -100,29 +129,80 @@ form .field-wrapper input {
   width: 5em;
 }
 
-.alert-table {
+/* Alert page */
+
+.price-table {
   background-color: rgb(40, 50, 60);
   width: 100%;
   border-collapse: collapse;
 }
 
-.alert-table tr td {
+.price-table tr td, .price-table tr th {
+  height: 54px;
+  padding: 2px 12px 2px 12px;
+}
+
+.price-table tr td {
   border-style: solid;
   border-width: 2px 0 0 0;
 }
 
-.alert-table tr td {
-  padding: 0.5em 0.25em;
+.price-table tr th {
+  text-align: left;
 }
 
-.alert-table .alert-description {
+.price-table tr th.align-right, .price-table tr td.align-right {
+  text-align: right;
+}
+
+.price-table .fill {
   width: 100%;
 }
 
-.alert-table .alert-description.sent {
+.alert-description.sent {
   text-decoration: line-through;
 }
 
-.alert-table .alert-description .direction {
+.alert-description .direction {
   font-weight: bold;
+}
+
+/* Portfolio page */
+
+
+.portfolio-summary-table th {
+  text-align: right;
+  padding-right: 0.5em;
+}
+
+.portfolio-top {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.portfolio-top > * {
+  display: inline-block;
+}
+
+.small-name {
+  display: none;
+}
+
+.large-name {
+  display: initial;
+}
+
+@media only screen and (max-width: 490px) {
+  .asset-table .value {
+    display: none;
+  }
+
+  .small-name {
+    display: initial;
+  }
+
+  .large-name {
+    display: none;
+  }
 }

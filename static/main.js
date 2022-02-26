@@ -30,20 +30,35 @@ document
   .querySelectorAll("form[data-format-action]")
   .forEach(form => {
     const actionTemplate = form.action
+    const actionVariables = {}
 
     form.querySelectorAll("[data-format-action]")
       .forEach(elem => {
         const replacePlaceholder = () => {
-          const replaceName = elem.dataset.formatAction
+          actionVariables[elem.dataset.formatAction] = elem.value
+          let action = actionTemplate
 
-          form.action = actionTemplate
-            .replace('{' + replaceName + '}', elem.value)
-            .replace('%7B' + replaceName + '%7D', elem.value)
+          Object.entries(actionVariables)
+            .forEach(([key, value]) => {
+              action = action
+                .replace('{' + key + '}', value)
+                .replace('%7B' + key + '%7D', value)
+            })
+
+          form.action = action
         }
 
         replacePlaceholder()
 
         elem.addEventListener("change", () => {
+          replacePlaceholder()
+        })
+
+        elem.addEventListener("click", () => {
+          replacePlaceholder()
+        })
+
+        elem.addEventListener("submit", () => {
           replacePlaceholder()
         })
       })

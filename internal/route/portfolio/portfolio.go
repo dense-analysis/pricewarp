@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"sort"
 	"strconv"
 	"github.com/shopspring/decimal"
 	"github.com/gorilla/mux"
@@ -323,6 +324,20 @@ type PortfolioListPageData struct {
 	AveragePerformance decimal.Decimal
 }
 
+type byValueOrder []TrackedAsset
+
+func (a byValueOrder) Len() int {
+	return len(a)
+}
+
+func (a byValueOrder) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a byValueOrder) Less(i, j int) bool {
+	return a[j].Value.LessThan(a[i].Value)
+}
+
 // HandlePortfolio shows the assets and cash a user has.
 func HandlePortfolio(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
 	data := PortfolioListPageData{}
@@ -362,6 +377,8 @@ func HandlePortfolio(conn *database.Conn, writer http.ResponseWriter, request *h
 
 			return
 		}
+
+		sort.Sort(byValueOrder(data.AssetList))
 
 		// Add cash in fiat to the total value and amount purchased.
 		data.TotalValue = data.Portfolio.Cash

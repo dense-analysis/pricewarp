@@ -3,6 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Pricewarp</title>
     <link rel="stylesheet" href="/static/main.css" />
   </head>
@@ -11,10 +12,13 @@
       <h1>Pricewarp</h1>
       {{if .User}}
         <nav>
+          <a class="button" href="/alert">Alerts</a>
+          <a class="button" href="/portfolio">Portfolio</a>
           <button class="secondary" id="logout" type="button">Logout</button>
         </nav>
       {{end}}
     </header>
+    {{template "breadcrumbs" .}}
     <main>
       {{template "main" .}}
     </main>

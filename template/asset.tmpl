@@ -1,20 +1,36 @@
-{{define "main"}}
+{{define "breadcrumbs"}}
   <div class="breadcrumbs">
     <span class="crumb"><a href="/portfolio">Portfolio</a></span>
     <span class="crumb">{{.Asset.Currency.Ticker}}</span>
   </div>
-  <dl class="asset-description">
-    <dt>Name</dt>
-    <dd>{{.Asset.Currency.Name}}</dd>
-    <dt>Ticker</dt>
-    <dd>{{.Asset.Currency.Ticker}}</dd>
-    <dt>Amount</dt>
-    <dd>{{.Asset.Amount.String}}</dd>
-    <dt>Purchased</dt>
-    <dd>{{.Asset.Purchased.StringFixed 2}}</dd>
-    <dt>Value</dt>
-    <dd>{{.Asset.Value.StringFixed 2}}</dd>
-    <dt>Performance</dt>
-    <dd>{{.Asset.Performance.StringFixed 2}}%</dd>
-  </dl>
+{{end}}
+{{define "main"}}
+  <table class="portfolio-summary-table">
+    <tbody>
+      <tr>
+        <th>Name</th>
+        <td>{{.Asset.Currency.Name}}</td>
+      </tr>
+      <tr>
+        <th>Ticker</th>
+        <td>{{.Asset.Currency.Ticker}}</td>
+      </tr>
+      <tr>
+        <th>Amount</th>
+        <td>{{.Asset.Amount.String}}</td>
+      </tr>
+      <tr>
+        <th>Purchased</th>
+        <td>{{.Asset.Purchased.StringFixed 2}}</td>
+      </tr>
+      <tr>
+        <th>Value</th>
+        <td>{{.Asset.Value.StringFixed 2}}</td>
+      </tr>
+      <tr>
+        <th>Performance</th>
+        <td>{{.Asset.Performance.StringFixed 2}}%</td>
+      </tr>
+    </tbody>
+  </table>
 {{end}}

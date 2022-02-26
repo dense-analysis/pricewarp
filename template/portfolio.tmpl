@@ -1,99 +1,86 @@
+{{define "breadcrumbs"}}
+{{end}}
 {{define "main"}}
   {{$currency := .Portfolio.Currency}}
-  <form class="line-wrap-form" method="post">
-    <div class="field-wrapper">
-      Use
-      <select name="currency">
-        {{range .ToCurrencyList}}
-          <option value="{{.ID}}"{{if eq .ID $currency.ID}} selected{{end}}>{{.Name}}</option>
-        {{end}}
-      </select>
-      as currency.
-    </div>
-    <div class="field-wrapper">
-      With
-      <input class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
-      cash available.
-    </div>
-    <div class="field-wrapper">
-      <button>Update Currency</button>
-    </div>
-  </form>
+  <div class="portfolio-top">
+    <form class="line-wrap-form" method="post">
+      <div class="field-wrapper">
+        Holding
+        <input class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
+        <select name="currency">
+          {{range .ToCurrencyList}}
+            <option value="{{.ID}}"{{if eq .ID $currency.ID}} selected{{end}}>{{.Name}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div class="field-wrapper">
+        <button>Update Currency</button>
+      </div>
+    </form>
+    {{if .Portfolio.Currency.ID}}
+      <table class="portfolio-summary-table">
+        <tbody>
+          <tr>
+            <th>Purchased</th>
+            <td>{{.TotalPurchased.StringFixed 2}}</td>
+          </tr>
+          <tr>
+            <th>Total</th>
+            <td>{{.TotalValue.StringFixed 2}}</td>
+          </tr>
+          <tr>
+            <th>Profit</th>
+            <td>{{.TotalProfit.StringFixed 2}}</td>
+          </tr>
+          <tr>
+            <th>Performance</th>
+            <td>{{.AveragePerformance.StringFixed 2}}%</td>
+          </tr>
+        </tbody>
+      </table>
+    {{end}}
+  </div>
   {{if .Portfolio.Currency.ID}}
-    <!-- TODO: Use JS to set the form action -->
-    <form class="line-wrap-form" method="post" data-format-action action="/portfolio/{ticker}/buy">
-      <div class="field-wrapper">
-        Buy
-        <input required name="crypto" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">
-        <select data-format-action="ticker">
-          {{range .FromCurrencyList}}
-            <option value="{{.Ticker}}">{{.Name}}</option>
-          {{end}}
-        </select>
-        for
-        <input required name="fiat" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">
-        {{.Portfolio.Currency.Ticker}}
-      </div>
-      <div class="field-wrapper">
-        <button>Buy</button>
-      </div>
-    </form>
-    <form class="line-wrap-form" method="post" data-format-action action="/portfolio/{ticker}/sell">
-      <div class="field-wrapper">
-        Sell
-        <input required name="crypto" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">
-        <select data-format-action="ticker">
-          {{range .FromCurrencyList}}
-            <option value="{{.Ticker}}">{{.Name}}</option>
-          {{end}}
-        </select>
-        for
-        <input required name="fiat" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">
-        {{.Portfolio.Currency.Ticker}}
-      </div>
-      <div class="field-wrapper">
-        <button>Sell</button>
-      </div>
-    </form>
-    <table class="portfolio-summary-table">
-      <tbody>
-        <tr>
-          <th>Purchased</th>
-          <td>{{.TotalPurchased.StringFixed 2}}</td>
-        </tr>
-        <tr>
-          <th>Total</th>
-          <td>{{.TotalValue.StringFixed 2}}</td>
-        </tr>
-        <tr>
-          <th>Profit</th>
-          <td>{{.TotalProfit.StringFixed 2}}</td>
-        </tr>
-        <tr>
-          <th>Performance</th>
-          <td>{{.AveragePerformance.StringFixed 2}}%</td>
-        </tr>
-      </tbody>
-    </table>
-    <table class="asset-table">
+    <table class="price-table asset-table">
       <thead>
         <tr>
-          <th>Currency</th>
-          <th>Portfolio %</th>
-          <th>Value</th>
-          <th>Performance</th>
+          <th class="currency">Currency</th>
+          <th class="share-of-portfolio align-right">
+            <span class="large-name">Portfolio %</span>
+            <span class="small-name" aria-description="Portfolio %">%</span>
+          </th>
+          <th class="value align-right">Value</th>
+          <th class="performance align-right">Performance</th>
         </tr>
       </thead>
       <tbody>
         {{range .AssetList}}
           <tr>
-            <td><a href="/portfolio/{{.Currency.Ticker}}">{{.Currency.Name}}</a></td>
-            <td>{{.ShareOfPortfolio.StringFixed 2}}%</td>
-            <td>{{.Value.StringFixed 2}} {{$currency.Ticker}}</td>
-            <td>{{.Performance.StringFixed 2}}%</td>
+            <td class="currency"><a href="/portfolio/{{.Currency.Ticker}}">{{.Currency.Name}}</a></td>
+            <td class="share-of-portfolio align-right">{{.ShareOfPortfolio.StringFixed 2}}%</td>
+            <td class="value align-right">{{.Value.StringFixed 2}} {{$currency.Ticker}}</td>
+            <td class="performance align-right">{{.Performance.StringFixed 2}}%</td>
           </tr>
         {{end}}
       </tbody>
     </table>
+    <form class="line-wrap-form" method="post" data-format-action action="/portfolio/{ticker}/{verb}">
+      <div class="field-wrapper">
+        Trade
+        <input required name="crypto" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">
+        <select data-format-action="ticker">
+          {{range .FromCurrencyList}}
+            <option value="{{.Ticker}}">{{.Name}}</option>
+          {{end}}
+        </select>
+        &lt;-&gt;
+        <input required name="fiat" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">
+        {{.Portfolio.Currency.Ticker}}
+      </div>
+      <div class="field-wrapper">
+        <button data-format-action="verb" value="buy">Buy</button>
+        <button data-format-action="verb" value="sell">Sell</button>
+      </div>
+    </form>
   {{end}}
 {{end}}

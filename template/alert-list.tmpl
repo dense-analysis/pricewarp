@@ -1,10 +1,12 @@
+{{define "breadcrumbs"}}
+{{end}}
 {{define "main"}}
   {{template "alert-form" .}}
-  <table class="alert-table">
+  <table class="price-table alert-table">
     <tbody>
       {{range .AlertList}}
         <tr>
-          <td class="alert-description{{if .Sent}} sent{{end}}">
+          <td class="fill alert-description{{if .Sent}} sent{{end}}">
             <span class="from-currency">{{.From.Name}}</span>
             <span class="direction">{{if .Above}}≥{{else}}≤{{end}}</span>
             <span class="value">{{.Value.StringFixed 2}}</span>
