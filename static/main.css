@@ -11,6 +11,10 @@ html {
   box-sizing: inherit;
 }
 
+[hidden] {
+  display: none;
+}
+
 /* General element styles */
 
 a {
@@ -47,6 +51,32 @@ input, select {
   border-width: 2px;
   border-color: rgb(118, 118, 118);
   font-size: 12pt;
+}
+
+/* Modals */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.5)
+}
+
+.modal > .modal-content {
+  background-color: rgb(46, 55, 64);
+  margin: 10% auto;
+  margin-top: calc(70vh / 2);
+  max-width: calc(768px - 20em);
+  padding: 1em;
+}
+
+.modal > .modal-content > .modal-actions {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: nowrap;
 }
 
 /* Body and navigation */
@@ -168,7 +198,6 @@ form .field-wrapper input {
 }
 
 /* Portfolio page */
-
 
 .portfolio-summary-table th {
   text-align: right;

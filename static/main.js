@@ -1,3 +1,17 @@
+// Modal cancel buttons.
+document
+  .querySelectorAll(".modal [data-cancel]")
+  .forEach(button => {
+    button.addEventListener("click", () => {
+      const modal = button.closest('.modal')
+
+      if (modal) {
+        modal.setAttribute('hidden', '')
+      }
+    })
+  })
+
+// The logout button logging out via POST.
 document.getElementById("logout")
   .addEventListener("click", () => {
     fetch("/logout", {
@@ -8,13 +22,31 @@ document.getElementById("logout")
       })
   })
 
+// Opening a modal to confirm deleting an alert.
 document
-  .querySelectorAll("button[data-delete-id]")
+  .querySelectorAll("button[data-try-delete-id]")
   .forEach(button => {
-    const id = button.dataset.deleteId
-
     button.addEventListener("click", () => {
-      fetch("/alert/" + id, {
+      document
+        .querySelectorAll("[data-confirm-delete-modal] [data-confirm]")
+        .forEach(confirmButton => {
+          confirmButton.dataset.deleteId = button.dataset.tryDeleteId
+        })
+
+      document
+        .querySelectorAll("[data-confirm-delete-modal]")
+        .forEach(modal => {
+          modal.removeAttribute('hidden')
+        })
+    })
+  })
+
+// Confirmation of deleting an alert.
+document
+  .querySelectorAll("[data-confirm-delete-modal] [data-confirm]")
+  .forEach(button => {
+    button.addEventListener("click", () => {
+      fetch("/alert/" + button.dataset.deleteId, {
         method: "DELETE",
       })
         .then(response => {
