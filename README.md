@@ -1,10 +1,10 @@
 # pricewarp
 
-This project sets up a self-serve cyrptocurrency price alert system to send
-emails when cryptocurrencies go above or below a certain price.
+This project sets up a self-serve cyrptocurrency price alert and portfolio tracking system
+to keep track of cryptocurrency prices and how much money you have.
 
-![price alert list](https://user-images.githubusercontent.com/3518142/154852055-39d3111a-6582-4df0-9296-6b7d11068da7.png)
-![price alert form](https://user-images.githubusercontent.com/3518142/154852057-89e3120c-3712-40fd-9226-04fc40646246.png)
+![price alert list](https://user-images.githubusercontent.com/3518142/155859069-5bd83752-8201-444b-887a-1df436b3531b.png)
+![portfolio](https://user-images.githubusercontent.com/3518142/155859067-be96392a-16e8-4bcc-9b1e-a1ba629af1b0.png)
 ![example email](https://user-images.githubusercontent.com/3518142/154852169-13587064-2b98-4aa3-a2c2-e85ec3013375.png)
 
 ## Installation
