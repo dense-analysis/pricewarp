@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
-
 (
     cd cmd/pricewarp && go build -o ../../bin/pricewarp
 )
