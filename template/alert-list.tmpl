@@ -13,9 +13,7 @@
             <span class="to-currency">{{.To.Name}}</span>
           </td>
           <td><a class="button" href="/alert/{{.ID}}">Update</a></td>
-          <td>
-            <button class="danger" type="button" data-try-delete-id="{{.ID}}">Delete</button>
-          </td>
+          <td><button type="button" class="danger" data-try-delete-id="{{.ID}}">Delete</button></td>
         </tr>
       {{end}}
     </tbody>
@@ -24,8 +22,8 @@
     <div class="modal-content">
       <p>Are you sure you wish to delete the alert?</p>
       <div class="modal-actions">
-        <button class="danger" data-confirm>Confirm Deletion</button>
-        <button class="secondary cancel" data-cancel>Cancel</button>
+        <button type="button" class="danger" data-confirm>Confirm Deletion</button>
+        <button type="button" class="secondary cancel" data-cancel>Cancel</button>
       </div>
     </div>
   </div>
