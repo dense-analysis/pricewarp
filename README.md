@@ -56,6 +56,9 @@ information. This should be set to `false` in production.
 Run `bin/ingest` to load cryptocurrency price data into the database. This
 should be run periodically to get the latest prices for cryptocurrencies.
 
+Storing this price data can take up lots of space. You can condense the price
+data into daily average prices by running `./condense-prices.sh`.
+
 ## Sending Email Alerts
 
 Run `bin/notify` to send price alert emails using the SMTP credentials set in
@@ -102,8 +105,9 @@ price data and send email alerts.
 ```cron
 @reboot cd /your/dir && bin/pricewarp &> server.log
 
-  55 *  *   *   *     cd /your/dir && bin/ingest
-  0  *  *   *   *     cd /your/dir && bin/notify
+  0/10 *  *   *   *     cd /your/dir && bin/ingest
+  1/10 *  *   *   *     cd /your/dir && bin/notify
+  2    0  *   *   *     cd /your/dir && ./condense-prices.sh
 ```
 
 You could start your server right away with `nohup`.
