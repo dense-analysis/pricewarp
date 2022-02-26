@@ -4,12 +4,17 @@ import (
 	"strconv"
 	"github.com/shopspring/decimal"
 	"github.com/gorilla/mux"
+	"github.com/w0rp/pricewarp/internal/template"
 	"github.com/w0rp/pricewarp/internal/database"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/route/util"
+	"github.com/w0rp/pricewarp/internal/route/query"
 	"net/http"
 )
+
+var One decimal.Decimal = decimal.NewFromInt(1)
+var Hundred decimal.Decimal = decimal.NewFromInt(100)
 
 // TrackedAsset is an Asset with additional information available to it.
 type TrackedAsset struct {
@@ -26,14 +31,16 @@ select
 	currency.name,
 	cash
 from crypto_portfolio
+inner join crypto_currency as currency
+on currency.id = crypto_portfolio.currency_id
 `
 
 func scanPortfolio(row database.Row, portfolio *model.Portfolio) error {
 	return row.Scan(
-		portfolio.Currency.ID,
-		portfolio.Currency.Ticker,
-		portfolio.Currency.Name,
-		portfolio.Cash,
+		&portfolio.Currency.ID,
+		&portfolio.Currency.Ticker,
+		&portfolio.Currency.Name,
+		&portfolio.Cash,
 	)
 }
 
@@ -41,12 +48,6 @@ func loadPortfolio(conn *database.Conn, user *model.User, portfolio *model.Portf
 	row := conn.QueryRow(portfolioQuery + " where user_id = $1", user.ID)
 
 	return scanPortfolio(row, portfolio)
-}
-
-var currencyQuery = "select id, ticker, name from crypto_currency"
-
-func scanCurrency(row database.Row, currency *model.Currency) error {
-	return row.Scan(&currency.ID, &currency.Ticker, &currency.Name)
 }
 
 var assetQuery = `
@@ -93,7 +94,7 @@ func loadAssetList(conn *database.Conn, userID int, assetList *[]TrackedAsset) e
 		assetList,
 		1,
 		scanTrackedAsset,
-		assetQuery + "where user_id = $1 order by time",
+		assetQuery + "where user_id = $1",
 		userID,
 	)
 }
@@ -142,7 +143,7 @@ func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []s
 		scanPrice,
 		priceQuery + `
 			where from_currency.ticker = ANY($1)
-			and (to_currency.id = $2 or to_currency.ticker = 'BTC')"
+			and (to_currency.id = $2 or to_currency.ticker = 'BTC')
 			order by "from" desc, "to" desc, time desc;
 		`,
 		tickerList,
@@ -175,7 +176,9 @@ func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []
 		}
 	}
 
-	for _, asset := range assetList {
+	for i := range assetList {
+		asset := &assetList[i]
+
 		if multiplier, ok := currencyPrices[asset.Currency.Ticker]; ok {
 			// Conversion from a currency to fiat directly.
 			asset.Value = asset.Amount.Mul(multiplier)
@@ -197,22 +200,21 @@ func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []
 		totalValue = totalValue.Add(asset.Value)
 	}
 
-	one := decimal.New(1, 1)
-	hundred := decimal.New(100, 1)
+	for i := range assetList {
+		asset := &assetList[i]
 
-	for _, asset := range assetList {
 		// The share of the portofolio is the value over the total value
 		if totalValue.IsZero() {
 			asset.ShareOfPortfolio = decimal.Zero
 		} else {
-			asset.ShareOfPortfolio = asset.Value.Div(totalValue).Mul(hundred)
+			asset.ShareOfPortfolio = asset.Value.Div(totalValue).Mul(Hundred)
 		}
 
 		// Calculate percentage gains per asset
 		if asset.Purchased.IsZero() {
 			asset.Performance = decimal.Zero
 		} else {
-			asset.Performance = asset.Value.Div(asset.Purchased).Sub(one).Mul(hundred)
+			asset.Performance = asset.Value.Div(asset.Purchased).Sub(One).Mul(Hundred)
 		}
 	}
 
@@ -220,9 +222,11 @@ func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []
 }
 
 var assetUpdateQuery = `
-update crypto_asset
+insert into crypto_asset
+(user_id, currency_id, purchased, amount)
+values ($1, $2, $3, $4)
+on conflict (user_id, currency_id) do update
 set purchased = $3, amount = $4
-where user_id = $1 and currency_id = $2
 `
 
 func updateAsset(conn database.Queryable, user *model.User, asset *model.Asset) error {
@@ -232,8 +236,8 @@ func updateAsset(conn database.Queryable, user *model.User, asset *model.Asset) 
 var portfolioUpdateQuery = `
 insert into crypto_portfolio (user_id, currency_id, cash)
 values ($1, $2, $3)
-on conflict (user_id, currency_id) do update
-set cash = $3
+on conflict (user_id) do update
+set currency_id = $2, cash = $3
 `
 
 func updatePortfolio(conn database.Queryable, user *model.User, portfolio *model.Portfolio) error {
@@ -291,9 +295,7 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 		return
 	}
 
-	row := conn.QueryRow(currencyQuery + " where currency_id = $1", currencyID)
-
-	if err := scanCurrency(row, &data.Portfolio.Currency); err != nil {
+	if err := query.LoadCurrencyByID(conn, &data.Portfolio.Currency, currencyID); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondValidationError(writer, "Unknown currency ID")
 		} else {
@@ -313,12 +315,16 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 type PortfolioListPageData struct {
 	PortfolioPageData
 	AssetList []TrackedAsset
+	ToCurrencyList []model.Currency
+	FromCurrencyList []model.Currency
+	TotalPurchased decimal.Decimal
 	TotalValue decimal.Decimal
+	TotalProfit decimal.Decimal
 	AveragePerformance decimal.Decimal
 }
 
-// HandlePortfolioList shows the assets and cash a user has.
-func HandlePortfolioList(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
+// HandlePortfolio shows the assets and cash a user has.
+func HandlePortfolio(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
 	data := PortfolioListPageData{}
 
 	if !loadUser(conn, writer, request, &data.User) {
@@ -335,6 +341,14 @@ func HandlePortfolioList(conn *database.Conn, writer http.ResponseWriter, reques
 		}
 	}
 
+	if err := query.LoadCurrencyList(conn, &data.FromCurrencyList); err != nil {
+		util.RespondInternalServerError(writer, err)
+
+		return
+	}
+
+	data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
+
 	if data.Portfolio.Currency.ID != 0 {
 		// Only load assets once a currency has been set.
 		if err := loadAssetList(conn, data.User.ID, &data.AssetList); err != nil {
@@ -349,25 +363,25 @@ func HandlePortfolioList(conn *database.Conn, writer http.ResponseWriter, reques
 			return
 		}
 
-		data.TotalValue = decimal.Zero
-		totalPurchased := decimal.Zero
+		// Add cash in fiat to the total value and amount purchased.
+		data.TotalValue = data.Portfolio.Cash
+		data.TotalPurchased = data.Portfolio.Cash
 
 		for _, asset := range data.AssetList {
 			data.TotalValue = data.TotalValue.Add(asset.Value)
-			totalPurchased = totalPurchased.Add(asset.Purchased)
+			data.TotalPurchased = data.TotalPurchased.Add(asset.Purchased)
 		}
 
-		if totalPurchased.IsZero() {
+		data.TotalProfit = data.TotalValue.Sub(data.TotalPurchased)
+
+		if data.TotalPurchased.IsZero() {
 			data.AveragePerformance = decimal.Zero
 		} else {
-			data.AveragePerformance = data.TotalValue.
-				Div(totalPurchased).
-				Sub(decimal.New(1, 1)).
-				Mul(decimal.New(100, 1))
+			data.AveragePerformance = data.TotalValue.Div(data.TotalPurchased).Sub(One).Mul(Hundred)
 		}
 	}
 
-	// TODO: Render template.
+	template.Render(template.Portfolio, writer, data)
 }
 
 type AssetAdjustData struct {
@@ -401,15 +415,13 @@ func loadAssetAdjustFormData(
 
 	ticker := mux.Vars(request)["ticker"]
 
-	asset := model.Asset{}
-
 	row := conn.QueryRow(
-		optionalAssetQuery + " where asset.user_id = $1 and currency.ticker = $2",
+		optionalAssetQuery + " and asset.user_id = $1 where currency.ticker = $2",
 		data.User.ID,
 		ticker,
 	)
 
-	if err := scanAsset(row, &asset); err != nil {
+	if err := scanAsset(row, &data.asset); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
@@ -558,7 +570,7 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 	ticker := mux.Vars(request)["ticker"]
 
 	row := conn.QueryRow(
-		optionalAssetQuery + " where asset.user_id = $1 and currency.ticker = $2",
+		optionalAssetQuery + " and asset.user_id = $1 where currency.ticker = $2",
 		data.User.ID,
 		ticker,
 	)
@@ -583,5 +595,5 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 
 	data.Asset = assetList[0]
 
-	// TODO: Render template.
+	template.Render(template.Asset, writer, data)
 }

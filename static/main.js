@@ -24,3 +24,27 @@ document
         })
     })
   })
+
+// Format the action of forms set up that way.
+document
+  .querySelectorAll("form[data-format-action]")
+  .forEach(form => {
+    const actionTemplate = form.action
+
+    form.querySelectorAll("[data-format-action]")
+      .forEach(elem => {
+        const replacePlaceholder = () => {
+          const replaceName = elem.dataset.formatAction
+
+          form.action = actionTemplate
+            .replace('{' + replaceName + '}', elem.value)
+            .replace('%7B' + replaceName + '%7D', elem.value)
+        }
+
+        replacePlaceholder()
+
+        elem.addEventListener("change", () => {
+          replacePlaceholder()
+        })
+      })
+  })

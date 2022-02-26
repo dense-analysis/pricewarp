@@ -1,6 +1,6 @@
 {{define "alert-form"}}
   {{$alert := .Alert}}
-  <form class="alert-form" method="post">
+  <form class="line-wrap-form" method="post">
     <div class="field-wrapper">
       <span>Alert me when value of</span>
       <select name="from">
@@ -13,7 +13,7 @@
         <option value="above"{{if .Alert.Above}} selected{{end}}><strong>↑<strong> above</option>
         <option value="below"{{if not .Alert.Above}} selected{{end}}>↓ below</option>
       </select>
-      <input class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00" name="value"{{if .Alert.Value.IsPositive}} value="{{.Alert.Value.String}}"{{end}}>
+      <input name="value" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00"{{if .Alert.Value.IsPositive}} value="{{.Alert.Value.String}}"{{end}}>
       <select name="to">
         {{range .ToCurrencyList}}
           <option value="{{.ID}}"{{if eq .ID $alert.To.ID}} selected{{end}}>{{.Name}}</option>

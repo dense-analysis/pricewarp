@@ -2,7 +2,6 @@
 package alert
 
 import (
-	"sort"
 	"strconv"
 	"net/http"
 	"github.com/shopspring/decimal"
@@ -12,6 +11,7 @@ import (
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/route/util"
+	"github.com/w0rp/pricewarp/internal/route/query"
 )
 
 var alertQuery = `
@@ -101,56 +101,6 @@ type AlertListPageData struct {
 	AlertList []model.Alert
 }
 
-var toCurrencyTickers = []string {
-	"USD",
-	"GBP",
-	"BTC",
-}
-
-type ByTickerOrder []model.Currency
-
-func IndexOfString(array []string, element string) int {
-	for i, v := range array {
-		if element == v {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func (a ByTickerOrder) Len() int {
-	return len(a)
-}
-
-func (a ByTickerOrder) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
-}
-
-func (a ByTickerOrder) Less(i, j int) bool {
-	leftIndex := IndexOfString(toCurrencyTickers, a[i].Ticker)
-	rightIndex := IndexOfString(toCurrencyTickers, a[j].Ticker)
-
-	return leftIndex < rightIndex
-}
-
-func BuildToCurrencyList(currencyList []model.Currency) []model.Currency {
-	toCurrencyList := make([]model.Currency, 0, len(toCurrencyTickers))
-
-	for _, currency := range currencyList {
-		for _, ticker := range toCurrencyTickers {
-			if currency.Ticker == ticker {
-				toCurrencyList = append(toCurrencyList, currency)
-				break
-			}
-		}
-	}
-
-	sort.Sort(ByTickerOrder(toCurrencyList))
-
-	return toCurrencyList
-}
-
 func HandleAlertList(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
 	data := AlertListPageData{}
 	data.Alert.Above = true
@@ -173,7 +123,7 @@ func HandleAlertList(conn *database.Conn, writer http.ResponseWriter, request *h
 		return
 	}
 
-	data.ToCurrencyList = BuildToCurrencyList(data.FromCurrencyList)
+	data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
 	template.Render(template.AlertList, writer, data)
 }
 
@@ -221,7 +171,7 @@ func HandleAlert(conn *database.Conn, writer http.ResponseWriter, request *http.
 		if err := loadCurrencyList(conn, &data.FromCurrencyList); err != nil {
 			util.RespondInternalServerError(writer, err)
 		} else {
-			data.ToCurrencyList = BuildToCurrencyList(data.FromCurrencyList)
+			data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
 			template.Render(template.AlertList, writer, data)
 		}
 	}

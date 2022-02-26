@@ -1,0 +1,20 @@
+{{define "main"}}
+  <div class="breadcrumbs">
+    <span class="crumb"><a href="/portfolio">Portfolio</a></span>
+    <span class="crumb">{{.Asset.Currency.Ticker}}</span>
+  </div>
+  <dl class="asset-description">
+    <dt>Name</dt>
+    <dd>{{.Asset.Currency.Name}}</dd>
+    <dt>Ticker</dt>
+    <dd>{{.Asset.Currency.Ticker}}</dd>
+    <dt>Amount</dt>
+    <dd>{{.Asset.Amount.String}}</dd>
+    <dt>Purchased</dt>
+    <dd>{{.Asset.Purchased.StringFixed 2}}</dd>
+    <dt>Value</dt>
+    <dd>{{.Asset.Value.StringFixed 2}}</dd>
+    <dt>Performance</dt>
+    <dd>{{.Asset.Performance.StringFixed 2}}%</dd>
+  </dl>
+{{end}}

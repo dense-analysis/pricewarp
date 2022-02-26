@@ -9,7 +9,7 @@ import (
 func RespondInternalServerError(writer http.ResponseWriter, err error) {
 	writer.WriteHeader(http.StatusInternalServerError)
 	fmt.Fprintf(writer, "Internal Server Error\n")
-	log.Printf("internal error: %s\n", err.Error())
+	log.Printf("internal error: %+v\n", err)
 }
 
 func RespondValidationError(writer http.ResponseWriter, message string) {

@@ -65,7 +65,7 @@ func main() {
 	updateAlertRoute := addDatabaseConnection(alert.HandleUpdateAlert)
 	deleteAlertRoute := addDatabaseConnection(alert.HandleDeleteAlert)
 
-	portfolioListRoute := addDatabaseConnection(portfolio.HandlePortfolioList)
+	portfolioRoute := addDatabaseConnection(portfolio.HandlePortfolio)
 	portfolioUpdateRoute := addDatabaseConnection(portfolio.HandlePortfolioUpdate)
 	portfolioAssetRoute := addDatabaseConnection(portfolio.HandleAsset)
 	portfolioBuyRoute := addDatabaseConnection(portfolio.HandleAssetBuy)
@@ -80,7 +80,7 @@ func main() {
 	router.HandleFunc("/alert/{id}", alertRoute).Methods("GET")
 	router.HandleFunc("/alert/{id}", updateAlertRoute).Methods("POST")
 	router.HandleFunc("/alert/{id}", deleteAlertRoute).Methods("DELETE")
-	router.HandleFunc("/portfolio", portfolioListRoute).Methods("GET")
+	router.HandleFunc("/portfolio", portfolioRoute).Methods("GET")
 	router.HandleFunc("/portfolio", portfolioUpdateRoute).Methods("POST")
 	router.HandleFunc("/portfolio/{ticker}", portfolioAssetRoute).Methods("GET")
 	router.HandleFunc("/portfolio/{ticker}/buy", portfolioBuyRoute).Methods("POST")

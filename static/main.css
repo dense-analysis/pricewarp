@@ -74,6 +74,16 @@ main {
 main {
 }
 
+.template-alert {
+  padding: 0.5em;
+  background: rgb(225, 225, 225);
+  color: rgb(211, 0, 0);
+  border-color: rgb(100, 100, 100);
+  border-style: solid;
+  border-width: 10px;
+  font-size: 200%;
+}
+
 form .field-wrapper {
   margin-bottom: 1em;
 }
@@ -82,11 +92,11 @@ form .field-wrapper input {
   display: block;
 }
 
-.alert-form .field-wrapper input, .alert-form .field-wrapper select {
+.line-wrap-form .field-wrapper input, .line-wrap-form .field-wrapper select {
   display: inline-block;
 }
 
-.alert-form input.price {
+.line-wrap-form input.price {
   width: 5em;
 }
 
