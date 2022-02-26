@@ -73,8 +73,7 @@ document
           Object.entries(actionVariables)
             .forEach(([key, value]) => {
               action = action
-                .replace('{' + key + '}', value)
-                .replace('%7B' + key + '%7D', value)
+                .replace('[' + key + ']', value)
             })
 
           form.action = action

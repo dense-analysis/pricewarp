@@ -172,7 +172,7 @@ func HandleAlert(conn *database.Conn, writer http.ResponseWriter, request *http.
 			util.RespondInternalServerError(writer, err)
 		} else {
 			data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
-			template.Render(template.AlertList, writer, data)
+			template.Render(template.Alert, writer, data)
 		}
 	}
 }

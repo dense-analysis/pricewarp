@@ -10,7 +10,7 @@
       </select>
       <span>goes</span>
       <select name="direction">
-        <option value="above"{{if .Alert.Above}} selected{{end}}><strong>↑<strong> above</option>
+        <option value="above"{{if .Alert.Above}} selected{{end}}>↑ above</option>
         <option value="below"{{if not .Alert.Above}} selected{{end}}>↓ below</option>
       </select>
       <input name="value" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00"{{if .Alert.Value.IsPositive}} value="{{.Alert.Value.String}}"{{end}}>
