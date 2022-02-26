@@ -64,7 +64,7 @@
         {{end}}
       </tbody>
     </table>
-    <form class="line-wrap-form" method="post" data-format-action action="/portfolio/[ticker]/[verb]">
+    <form class="line-wrap-form" method="post" data-format-action action="/portfolio/:ticker/:verb">
       <div class="field-wrapper">
         Trade
         <input required name="crypto" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00">

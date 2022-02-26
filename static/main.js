@@ -73,7 +73,7 @@ document
           Object.entries(actionVariables)
             .forEach(([key, value]) => {
               action = action
-                .replace('[' + key + ']', value)
+                .replace(':' + key, value)
             })
 
           form.action = action
