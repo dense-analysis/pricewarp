@@ -3,7 +3,7 @@
   <form class="line-wrap-form" method="post">
     <div class="field-wrapper">
       <span>Alert me when value of</span>
-      <select name="from">
+      <select autofocus name="from">
         {{range .FromCurrencyList}}
           <option value="{{.ID}}"{{if eq .ID $alert.From.ID}} selected{{end}}>{{.Name}}</option>
         {{end}}

@@ -3,13 +3,16 @@ document
   .querySelectorAll(".modal [data-cancel]")
   .forEach(button => {
     button.addEventListener("click", () => {
-      const modal = button.closest('.modal')
+      const modal = button.closest(".modal")
 
       if (modal) {
-        modal.setAttribute('hidden', '')
+        modal.setAttribute("hidden", "")
       }
     })
   })
+    const above = select.querySelector("[value='above']")
+    const below = select.querySelector("[value='below']")
+
 
 // The logout button logging out via POST.
 document.getElementById("logout")
@@ -20,6 +23,19 @@ document.getElementById("logout")
       .then(() => {
         window.location.assign("/")
       })
+  })
+
+// Make typing 'a' and 'b' set 'above' and 'below' on the direction box.
+document
+  .querySelectorAll("[name='direction']")
+  .forEach(select => {
+    select.addEventListener("keydown", event => {
+      if (event.key === "a") {
+        select.value = "above"
+      } else if (event.key === "b") {
+        select.value = "below"
+      }
+    })
   })
 
 // Opening a modal to confirm deleting an alert.
@@ -36,7 +52,7 @@ document
       document
         .querySelectorAll("[data-confirm-delete-modal]")
         .forEach(modal => {
-          modal.removeAttribute('hidden')
+          modal.removeAttribute("hidden")
         })
     })
   })
