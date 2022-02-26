@@ -105,9 +105,9 @@ price data and send email alerts.
 ```cron
 @reboot cd /your/dir && bin/pricewarp &> server.log
 
-  0/10 *  *   *   *     cd /your/dir && bin/ingest
-  1/10 *  *   *   *     cd /your/dir && bin/notify
-  2    0  *   *   *     cd /your/dir && ./condense-prices.sh
+  */10    *  *   *   *     cd /your/dir && bin/ingest
+  1-59/10 *  *   *   *     cd /your/dir && bin/notify
+  2    0  *  *   *   *     cd /your/dir && ./condense-prices.sh
 ```
 
 You could start your server right away with `nohup`.
