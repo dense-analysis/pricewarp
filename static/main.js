@@ -10,8 +10,6 @@ document
       }
     })
   })
-    const above = select.querySelector("[value='above']")
-    const below = select.querySelector("[value='below']")
 
 
 // The logout button logging out via POST.
