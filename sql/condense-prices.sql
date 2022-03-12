@@ -25,6 +25,3 @@ SELECT "from", "to", time, value FROM crypto_price_temp;
 DROP TABLE crypto_price_temp;
 
 COMMIT;
-
--- Free up as much space as possible after condensing prices.
-VACUUM FULL ANALYZE;

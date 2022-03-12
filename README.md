@@ -25,6 +25,7 @@ postgres=# CREATE ROLE some_user WITH LOGIN PASSWORD 'some_password';
 postgres=# CREATE DATABASE some_database;
 postgres=# \c some_database
 some_database=# GRANT ALL ON ALL TABLES IN SCHEMA public to some_user;
+some_database=# GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO some_user;
 ```
 
 Your `.env` file should look like so.
@@ -108,6 +109,14 @@ price data and send email alerts.
   */10    *  *   *   *     cd /your/dir && bin/ingest
   1-59/10 *  *   *   *     cd /your/dir && bin/notify
   2       0  *   *   *     cd /your/dir && ./condense-prices.sh
+```
+
+You should configure Postgres to vacuum deleted rows for the database, or space
+will not be reclaimed for condensed prices. You could use the following in the
+crontab for the `postgres` user.
+
+```cron
+  3       0  *   *   *     psql pricewarp -c 'vacuum full analyze;'
 ```
 
 You could start your server right away with `nohup`.
