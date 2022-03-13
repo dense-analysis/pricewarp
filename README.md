@@ -116,7 +116,7 @@ will not be reclaimed for condensed prices. You could use the following in the
 crontab for the `postgres` user.
 
 ```cron
-  3       0  *   *   *     psql pricewarp -c 'vacuum full analyze;'
+  3       0  *   *   *     psql pricewarp -qc 'vacuum full analyze;'
 ```
 
 You could start your server right away with `nohup`.
