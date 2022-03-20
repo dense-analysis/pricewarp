@@ -1,23 +1,25 @@
 package main
 
 import (
+	"context"
+	"log"
+	"net/http"
 	"os"
 	"os/signal"
-	"context"
+	"strings"
 	"syscall"
-	"log"
 	"time"
-	"net/http"
+
 	"github.com/gorilla/mux"
-	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/model"
+	"github.com/w0rp/pricewarp/internal/route/alert"
+	"github.com/w0rp/pricewarp/internal/route/auth"
+	"github.com/w0rp/pricewarp/internal/route/portfolio"
+	"github.com/w0rp/pricewarp/internal/route/util"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/template"
-	"github.com/w0rp/pricewarp/internal/route/util"
-	"github.com/w0rp/pricewarp/internal/route/auth"
-	"github.com/w0rp/pricewarp/internal/route/alert"
-	"github.com/w0rp/pricewarp/internal/route/portfolio"
 )
 
 func handleIndex(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
@@ -99,7 +101,7 @@ func main() {
 	}
 
 	server := http.Server{
-		Addr: address,
+		Addr:    address,
 		Handler: router,
 	}
 
@@ -112,10 +114,16 @@ func main() {
 		}
 	}()
 
-	log.Println("Server started")
+	url := address
+
+	if strings.HasPrefix(url, ":") {
+		url = "localhost" + url
+	}
+
+	log.Printf("Server started at http://%s\n", url)
 	<-done
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
 		cancel()
 	}()
