@@ -3,12 +3,13 @@ package database
 
 import (
 	"context"
-	"os"
 	"fmt"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"os"
+
 	"github.com/jackc/pgtype"
 	shopspring "github.com/jackc/pgtype/ext/shopspring-numeric"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type Conn struct {
@@ -29,8 +30,8 @@ func afterConnect(context context.Context, conn *pgx.Conn) error {
 	// Set up a decimal type for prices.
 	conn.ConnInfo().RegisterDataType(pgtype.DataType{
 		Value: &shopspring.Numeric{},
-		Name: "numeric",
-		OID: pgtype.NumericOID,
+		Name:  "numeric",
+		OID:   pgtype.NumericOID,
 	})
 
 	return nil

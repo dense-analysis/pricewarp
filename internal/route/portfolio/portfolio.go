@@ -1,17 +1,18 @@
 package portfolio
 
 import (
+	"net/http"
 	"sort"
 	"strconv"
-	"github.com/shopspring/decimal"
+
 	"github.com/gorilla/mux"
-	"github.com/w0rp/pricewarp/internal/template"
+	"github.com/shopspring/decimal"
 	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/model"
-	"github.com/w0rp/pricewarp/internal/route/util"
 	"github.com/w0rp/pricewarp/internal/route/query"
-	"net/http"
+	"github.com/w0rp/pricewarp/internal/route/util"
+	"github.com/w0rp/pricewarp/internal/session"
+	"github.com/w0rp/pricewarp/internal/template"
 )
 
 var One decimal.Decimal = decimal.NewFromInt(1)
@@ -20,9 +21,9 @@ var Hundred decimal.Decimal = decimal.NewFromInt(100)
 // TrackedAsset is an Asset with additional information available to it.
 type TrackedAsset struct {
 	model.Asset
-	Value decimal.Decimal
+	Value            decimal.Decimal
 	ShareOfPortfolio decimal.Decimal
-	Performance decimal.Decimal
+	Performance      decimal.Decimal
 }
 
 var portfolioQuery = `
@@ -46,7 +47,7 @@ func scanPortfolio(row database.Row, portfolio *model.Portfolio) error {
 }
 
 func loadPortfolio(conn *database.Conn, user *model.User, portfolio *model.Portfolio) error {
-	row := conn.QueryRow(portfolioQuery + " where user_id = $1", user.ID)
+	row := conn.QueryRow(portfolioQuery+" where user_id = $1", user.ID)
 
 	return scanPortfolio(row, portfolio)
 }
@@ -95,7 +96,7 @@ func loadAssetList(conn *database.Conn, userID int, assetList *[]TrackedAsset) e
 		assetList,
 		1,
 		scanTrackedAsset,
-		assetQuery + "where user_id = $1",
+		assetQuery+"where user_id = $1",
 		userID,
 	)
 }
@@ -140,9 +141,9 @@ func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []s
 	return model.LoadList(
 		conn,
 		priceList,
-		len(tickerList) * 2,
+		len(tickerList)*2,
 		scanPrice,
-		priceQuery + `
+		priceQuery+`
 			where from_currency.ticker = ANY($1)
 			and (to_currency.id = $2 or to_currency.ticker = 'BTC')
 			order by "from" desc, "to" desc, time desc;
@@ -153,7 +154,7 @@ func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []s
 }
 
 func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []TrackedAsset) error {
-	tickerList := make([]string, 0, len(assetList) + 1)
+	tickerList := make([]string, 0, len(assetList)+1)
 	tickerList = append(tickerList, "BTC")
 
 	for _, asset := range assetList {
@@ -258,7 +259,7 @@ func loadUser(conn *database.Conn, writer http.ResponseWriter, request *http.Req
 }
 
 type PortfolioPageData struct {
-	User model.User
+	User      model.User
 	Portfolio model.Portfolio
 }
 
@@ -315,12 +316,12 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 
 type PortfolioListPageData struct {
 	PortfolioPageData
-	AssetList []TrackedAsset
-	ToCurrencyList []model.Currency
-	FromCurrencyList []model.Currency
-	TotalPurchased decimal.Decimal
-	TotalValue decimal.Decimal
-	TotalProfit decimal.Decimal
+	AssetList          []TrackedAsset
+	ToCurrencyList     []model.Currency
+	FromCurrencyList   []model.Currency
+	TotalPurchased     decimal.Decimal
+	TotalValue         decimal.Decimal
+	TotalProfit        decimal.Decimal
 	AveragePerformance decimal.Decimal
 }
 
@@ -403,9 +404,9 @@ func HandlePortfolio(conn *database.Conn, writer http.ResponseWriter, request *h
 
 type AssetAdjustData struct {
 	PortfolioPageData
-	asset model.Asset
+	asset  model.Asset
 	crypto decimal.Decimal
-	fiat decimal.Decimal
+	fiat   decimal.Decimal
 }
 
 func loadAssetAdjustFormData(
@@ -433,7 +434,7 @@ func loadAssetAdjustFormData(
 	ticker := mux.Vars(request)["ticker"]
 
 	row := conn.QueryRow(
-		optionalAssetQuery + " and asset.user_id = $1 where currency.ticker = $2",
+		optionalAssetQuery+" and asset.user_id = $1 where currency.ticker = $2",
 		data.User.ID,
 		ticker,
 	)
@@ -530,7 +531,7 @@ func HandleAssetBuy(conn *database.Conn, writer http.ResponseWriter, request *ht
 		data.asset.Amount = data.asset.Amount.Add(data.crypto)
 		data.Portfolio.Cash = data.Portfolio.Cash.Sub(data.fiat)
 
-		if (saveAssetAdjustChanges(conn, &data, writer, request)) {
+		if saveAssetAdjustChanges(conn, &data, writer, request) {
 			http.Redirect(writer, request, "/portfolio", http.StatusFound)
 		}
 	}
@@ -553,7 +554,7 @@ func HandleAssetSell(conn *database.Conn, writer http.ResponseWriter, request *h
 		data.asset.Amount = data.asset.Amount.Sub(data.crypto)
 		data.Portfolio.Cash = data.Portfolio.Cash.Add(data.fiat)
 
-		if (saveAssetAdjustChanges(conn, &data, writer, request)) {
+		if saveAssetAdjustChanges(conn, &data, writer, request) {
 			http.Redirect(writer, request, "/portfolio", http.StatusFound)
 		}
 	}
@@ -587,7 +588,7 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 	ticker := mux.Vars(request)["ticker"]
 
 	row := conn.QueryRow(
-		optionalAssetQuery + " and asset.user_id = $1 where currency.ticker = $2",
+		optionalAssetQuery+" and asset.user_id = $1 where currency.ticker = $2",
 		data.User.ID,
 		ticker,
 	)

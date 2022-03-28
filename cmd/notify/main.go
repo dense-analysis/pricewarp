@@ -2,25 +2,26 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"io"
-	"strings"
-	"strconv"
 	"crypto/tls"
+	"fmt"
+	"io"
 	"net/smtp"
+	"os"
+	"strconv"
+	"strings"
+
 	"github.com/shopspring/decimal"
-	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/env"
 )
 
 type CryptoAlert struct {
-	Id int
-	Email string
+	Id               int
+	Email            string
 	FromCurrencyName string
-	ToCurrencyName string
-	Above bool
-	Value decimal.Decimal
+	ToCurrencyName   string
+	Above            bool
+	Value            decimal.Decimal
 }
 
 func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
@@ -87,7 +88,7 @@ func sendEmail(to string, message string) error {
 	var conn *tls.Conn
 	var err error
 
-	if conn, err = tls.Dial("tcp", host + ":" + port, tlsconfig); err != nil {
+	if conn, err = tls.Dial("tcp", host+":"+port, tlsconfig); err != nil {
 		return err
 	}
 
@@ -154,7 +155,7 @@ Prices have changed recently:
 		for i, alert := range groupedList {
 			operator := "<="
 
-			if (alert.Above) {
+			if alert.Above {
 				operator = ">="
 			}
 
@@ -186,7 +187,7 @@ func markAlertsAsSent(conn *database.Conn, alertList []*CryptoAlert) error {
 	ids := make([]interface{}, len(alertList))
 
 	for i, alert := range alertList {
-		markers[i] = "$" + strconv.Itoa(i + 1)
+		markers[i] = "$" + strconv.Itoa(i+1)
 		ids[i] = alert.Id
 	}
 

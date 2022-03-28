@@ -1,8 +1,9 @@
 package env
 
 import (
-	"os"
 	"fmt"
+	"os"
+
 	"github.com/joho/godotenv"
 )
 

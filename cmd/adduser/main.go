@@ -3,11 +3,12 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"net/mail"
-	"golang.org/x/crypto/bcrypt"
-	"github.com/w0rp/pricewarp/internal/env"
+	"os"
+
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/env"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {

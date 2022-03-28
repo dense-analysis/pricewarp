@@ -2,16 +2,17 @@
 package alert
 
 import (
-	"strconv"
 	"net/http"
-	"github.com/shopspring/decimal"
+	"strconv"
+
 	"github.com/gorilla/mux"
-	"github.com/w0rp/pricewarp/internal/template"
+	"github.com/shopspring/decimal"
 	"github.com/w0rp/pricewarp/internal/database"
 	"github.com/w0rp/pricewarp/internal/model"
-	"github.com/w0rp/pricewarp/internal/session"
-	"github.com/w0rp/pricewarp/internal/route/util"
 	"github.com/w0rp/pricewarp/internal/route/query"
+	"github.com/w0rp/pricewarp/internal/route/util"
+	"github.com/w0rp/pricewarp/internal/session"
+	"github.com/w0rp/pricewarp/internal/template"
 )
 
 var alertQuery = `
@@ -62,7 +63,7 @@ func loadAlertList(conn *database.Conn, userID int, alertList *[]model.Alert) er
 		alertList,
 		1,
 		scanAlert,
-		alertQuery + "where user_id = $1 order by time",
+		alertQuery+"where user_id = $1 order by time",
 		userID,
 	)
 }
@@ -73,7 +74,7 @@ func loadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error
 		currencyList,
 		500,
 		scanCurrency,
-		currencyQuery + "order by name",
+		currencyQuery+"order by name",
 	)
 }
 
@@ -90,10 +91,10 @@ func loadUser(conn *database.Conn, writer http.ResponseWriter, request *http.Req
 }
 
 type AlertPageData struct {
-	User model.User
-	Alert model.Alert
+	User             model.User
+	Alert            model.Alert
 	FromCurrencyList []model.Currency
-	ToCurrencyList []model.Currency
+	ToCurrencyList   []model.Currency
 }
 
 type AlertListPageData struct {
@@ -142,7 +143,7 @@ func loadAlertForRequest(
 		return false
 	}
 
-	row := conn.QueryRow(alertQuery + " where user_id = $1 and crypto_alert.id = $2", user.ID, alertID)
+	row := conn.QueryRow(alertQuery+" where user_id = $1 and crypto_alert.id = $2", user.ID, alertID)
 
 	if err := scanAlert(row, alert); err != nil {
 		if err == database.ErrNoRows {
@@ -234,7 +235,7 @@ func loadAlertFromForm(
 
 	var row database.Row
 
-	row = conn.QueryRow(currencyQuery + "where id = $1", from)
+	row = conn.QueryRow(currencyQuery+"where id = $1", from)
 
 	if err := scanCurrency(row, &alert.From); err != nil {
 		util.RespondInternalServerError(writer, err)
@@ -242,7 +243,7 @@ func loadAlertFromForm(
 		return false
 	}
 
-	row = conn.QueryRow(currencyQuery + "where id = $1", to)
+	row = conn.QueryRow(currencyQuery+"where id = $1", to)
 
 	if err := scanCurrency(row, &alert.To); err != nil {
 		util.RespondInternalServerError(writer, err)

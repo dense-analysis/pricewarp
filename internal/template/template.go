@@ -1,12 +1,12 @@
 package template
 
 import (
-	"os"
-	"io"
-	"log"
 	"fmt"
 	"html"
 	"html/template"
+	"io"
+	"log"
+	"os"
 )
 
 var templateMap map[string]*template.Template

@@ -2,20 +2,21 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
-	"fmt"
-	"strconv"
-	"io/ioutil"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"github.com/w0rp/pricewarp/internal/env"
+
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/env"
 )
 
 type MigrationExecutor struct {
-	connection *database.Conn
-	directoryName string
+	connection        *database.Conn
+	directoryName     string
 	migrationFileList []string
 }
 
@@ -60,7 +61,7 @@ func (executor *MigrationExecutor) applyMigration(migrationNumber int, reverse b
 	for _, filename := range executor.migrationFileList {
 		splitList := strings.Split(filename, "_")
 		fileMigrationNumber, _ := strconv.Atoi(splitList[0])
-		isReverseFile := splitList[len(splitList) - 1] == "reverse.sql"
+		isReverseFile := splitList[len(splitList)-1] == "reverse.sql"
 
 		if migrationNumber == fileMigrationNumber && reverse == isReverseFile {
 			matchedFilename = filepath.Join(executor.directoryName, filename)

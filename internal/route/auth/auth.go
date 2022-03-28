@@ -2,15 +2,16 @@ package auth
 
 import (
 	"net/http"
-	"golang.org/x/crypto/bcrypt"
+
+	"github.com/w0rp/pricewarp/internal/database"
 	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/session"
 	"github.com/w0rp/pricewarp/internal/template"
-	"github.com/w0rp/pricewarp/internal/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type LoginFormData struct {
-	User *model.User
+	User         *model.User
 	ErrorMessage string
 }
 

@@ -2,16 +2,17 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"time"
-	"net/http"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
+	"os"
 	"strings"
+	"time"
+
 	"github.com/shopspring/decimal"
-	"github.com/w0rp/pricewarp/internal/env"
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/env"
 )
 
 type BinanceTickerResult struct {
@@ -28,7 +29,7 @@ func readBinanceTickerResults() ([]BinanceTickerResult, error) {
 
 	content, err := ioutil.ReadAll(response.Body)
 
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -42,12 +43,12 @@ func readBinanceTickerResults() ([]BinanceTickerResult, error) {
 }
 
 type CryptoPrice struct {
-	From string
-	To string
+	From  string
+	To    string
 	Value string
 }
 
-var suffixes = []string {
+var suffixes = []string{
 	"BTC",
 	"USD",
 	"USDT",
@@ -67,13 +68,13 @@ func readPrices(results []BinanceTickerResult) []CryptoPrice {
 					realCurrency = "USD"
 				}
 
-				fromCurrency := tickerData.Symbol[:len(tickerData.Symbol) - len(suffix)]
+				fromCurrency := tickerData.Symbol[:len(tickerData.Symbol)-len(suffix)]
 
 				if !strings.HasSuffix(fromCurrency, "DOWN") &&
-				!strings.HasSuffix(fromCurrency, "UP") &&
-				!strings.HasSuffix(fromCurrency, "BULL") &&
-				!strings.HasSuffix(fromCurrency, "BEAR") &&
-				(len(fromCurrency) < 4 || !strings.HasSuffix(fromCurrency, "B")) {
+					!strings.HasSuffix(fromCurrency, "UP") &&
+					!strings.HasSuffix(fromCurrency, "BULL") &&
+					!strings.HasSuffix(fromCurrency, "BEAR") &&
+					(len(fromCurrency) < 4 || !strings.HasSuffix(fromCurrency, "B")) {
 					prices = append(prices, CryptoPrice{
 						fromCurrency,
 						realCurrency,

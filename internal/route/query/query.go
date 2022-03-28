@@ -2,6 +2,7 @@ package query
 
 import (
 	"sort"
+
 	"github.com/w0rp/pricewarp/internal/database"
 	"github.com/w0rp/pricewarp/internal/model"
 )
@@ -19,13 +20,13 @@ func LoadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error
 		currencyList,
 		500,
 		scanCurrency,
-		currencyQuery + "order by name",
+		currencyQuery+"order by name",
 	)
 }
 
 // LoadCurrencyByID loads a single by ID.
 func LoadCurrencyByID(conn *database.Conn, currency *model.Currency, currencyID int) error {
-	row := conn.QueryRow(currencyQuery + "where id = $1", currencyID)
+	row := conn.QueryRow(currencyQuery+"where id = $1", currencyID)
 
 	return scanCurrency(row, currency)
 }
@@ -40,7 +41,7 @@ func indexOfString(array []string, element string) int {
 	return -1
 }
 
-var toCurrencyTickers = []string {
+var toCurrencyTickers = []string{
 	"USD",
 	"GBP",
 	"BTC",

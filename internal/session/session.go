@@ -2,12 +2,13 @@
 package session
 
 import (
-	"os"
 	"fmt"
 	"net/http"
+	"os"
+
 	"github.com/gorilla/sessions"
-	"github.com/w0rp/pricewarp/internal/model"
 	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/w0rp/pricewarp/internal/model"
 )
 
 var sessionStore *sessions.CookieStore
