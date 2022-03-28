@@ -459,8 +459,8 @@ func loadAssetAdjustFormData(
 		return false
 	}
 
-	if !data.fiat.IsPositive() {
-		util.RespondValidationError(writer, "fiat must be positive")
+	if data.fiat.IsNegative() {
+		util.RespondValidationError(writer, "fiat must not be negative")
 
 		return false
 	}
