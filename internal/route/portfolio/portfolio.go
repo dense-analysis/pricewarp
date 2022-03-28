@@ -474,7 +474,7 @@ func loadAssetAdjustFormData(
 		return false
 	}
 
-	if !data.fiat.IsPositive() {
+	if !data.crypto.IsPositive() {
 		util.RespondValidationError(writer, "crypto must be positive")
 
 		return false
