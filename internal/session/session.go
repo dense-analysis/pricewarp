@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/gorilla/sessions"
-	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/model"
+	"github.com/dense-analysis/pricewarp/internal/database"
+	"github.com/dense-analysis/pricewarp/internal/model"
 )
 
 var sessionStore *sessions.CookieStore

@@ -11,15 +11,15 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/env"
-	"github.com/w0rp/pricewarp/internal/model"
-	"github.com/w0rp/pricewarp/internal/route/alert"
-	"github.com/w0rp/pricewarp/internal/route/auth"
-	"github.com/w0rp/pricewarp/internal/route/portfolio"
-	"github.com/w0rp/pricewarp/internal/route/util"
-	"github.com/w0rp/pricewarp/internal/session"
-	"github.com/w0rp/pricewarp/internal/template"
+	"github.com/dense-analysis/pricewarp/internal/database"
+	"github.com/dense-analysis/pricewarp/internal/env"
+	"github.com/dense-analysis/pricewarp/internal/model"
+	"github.com/dense-analysis/pricewarp/internal/route/alert"
+	"github.com/dense-analysis/pricewarp/internal/route/auth"
+	"github.com/dense-analysis/pricewarp/internal/route/portfolio"
+	"github.com/dense-analysis/pricewarp/internal/route/util"
+	"github.com/dense-analysis/pricewarp/internal/session"
+	"github.com/dense-analysis/pricewarp/internal/template"
 )
 
 func handleIndex(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {

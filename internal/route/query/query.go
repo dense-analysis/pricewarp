@@ -3,8 +3,8 @@ package query
 import (
 	"sort"
 
-	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/model"
+	"github.com/dense-analysis/pricewarp/internal/database"
+	"github.com/dense-analysis/pricewarp/internal/model"
 )
 
 var currencyQuery = `select id, ticker, name from crypto_currency `

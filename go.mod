@@ -1,4 +1,4 @@
-module github.com/w0rp/pricewarp
+module github.com/dense-analysis/pricewarp
 
 go 1.18
 

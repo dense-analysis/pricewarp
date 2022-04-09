@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/env"
+	"github.com/dense-analysis/pricewarp/internal/database"
+	"github.com/dense-analysis/pricewarp/internal/env"
 )
 
 type MigrationExecutor struct {

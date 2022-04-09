@@ -7,12 +7,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/shopspring/decimal"
-	"github.com/w0rp/pricewarp/internal/database"
-	"github.com/w0rp/pricewarp/internal/model"
-	"github.com/w0rp/pricewarp/internal/route/query"
-	"github.com/w0rp/pricewarp/internal/route/util"
-	"github.com/w0rp/pricewarp/internal/session"
-	"github.com/w0rp/pricewarp/internal/template"
+	"github.com/dense-analysis/pricewarp/internal/database"
+	"github.com/dense-analysis/pricewarp/internal/model"
+	"github.com/dense-analysis/pricewarp/internal/route/query"
+	"github.com/dense-analysis/pricewarp/internal/route/util"
+	"github.com/dense-analysis/pricewarp/internal/session"
+	"github.com/dense-analysis/pricewarp/internal/template"
 )
 
 var alertQuery = `

@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/w0rp/pricewarp/internal/database"
+	"github.com/dense-analysis/pricewarp/internal/database"
 )
 
 // LoadList loads rows from a database into a list.
