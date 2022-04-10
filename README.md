@@ -1,7 +1,8 @@
-# pricewarp
+# Pricewarp
 
-This project sets up a self-serve cyrptocurrency price alert and portfolio tracking system
-to keep track of cryptocurrency prices and how much money you have.
+A self-serve FOSS cryptocurrency price alert and portfolio tracking system.
+
+With this tool you can keep track of cryptocurrency price changes and your crypto portfolio, without having to share your private information with third parties. This project uses an AGPL licence to ensure that it will always be available for those who need it. No frontend frameworks are employed to complicate matters, and Go is used as the backend to ensure timely and reliable delivery of content.
 
 ![price alert list](https://user-images.githubusercontent.com/3518142/155859069-5bd83752-8201-444b-887a-1df436b3531b.png)
 ![portfolio](https://user-images.githubusercontent.com/3518142/155859067-be96392a-16e8-4bcc-9b1e-a1ba629af1b0.png)
@@ -9,13 +10,15 @@ to keep track of cryptocurrency prices and how much money you have.
 
 ## Installation
 
+You can install this application with the following steps.
+
 1. Install Go 1.18
 2. Create a `.env` file in the project
 3. Run `./build.sh`
 4. Create a Postgres user and database
 5. Apply database migrations with `bin/migrate`
 
-Easy set up for a Postgres user for development looks like so:
+You may wish to set up a Postgres user for development like so:
 
 ```
 sudo su postgres
@@ -28,7 +31,7 @@ some_database=# GRANT ALL ON ALL TABLES IN SCHEMA public to some_user;
 some_database=# GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO some_user;
 ```
 
-Your `.env` file should look like so.
+Your `.env` file should look like so:
 
 ```
 DEBUG=true
@@ -49,21 +52,46 @@ SMTP_PORT=465
 SESSION_SECRET=some_32_char_secret_cookie_value
 ```
 
-The `DEBUG` flag enables serving files from `/static` and other debugging
+The `DEBUG` flag enables serving files from `/static`, and other debugging
 information. This should be set to `false` in production.
 
 ## Loading Price Data
 
 Run `bin/ingest` to load cryptocurrency price data into the database. This
 should be run periodically to get the latest prices for cryptocurrencies.
+It is recommended to run this program before `bin/notify`.
+
+### Reducing Database Size
 
 Storing this price data can take up lots of space. You can condense the price
 data into daily average prices by running `./condense-prices.sh`.
 
+You can keep track of how much space your database is using like so:
+
+```
+$ sudo su postgres
+$ psql
+
+postgres=# select pg_size_pretty(pg_database_size('pricewarp'));
+ pg_size_pretty 
+----------------
+ 29 MB
+(1 row)
+```
+
+You can consider running `VACUUM FULL ANALYZE;` to compress the price data as 
+small as possible. Please refer to 
+[the Postgres documentataion](https://www.postgresql.org/docs/current/sql-vacuum.html)
+for information on vacuuming.
+
 ## Sending Email Alerts
 
 Run `bin/notify` to send price alert emails using the SMTP credentials set in
-the `.env` file.
+the `.env` file. You should create test alerts to ensure emails will be delivered.
+Popular mail hosts can reject mail for all kinds of reasons.
+
+One easy way to ensure your mail will be delivered is to send with GMail as the SMTP
+provider to a GMail address, or similar for other popular email providers.
 
 ## Creating users
 
