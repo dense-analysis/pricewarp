@@ -6,7 +6,7 @@
     <form class="line-wrap-form" method="post">
       <div class="field-wrapper">
         Holding
-        <input class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
+        <input class="price" type="text" pattern="^\d*(\.\d*)?$" required placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
         <select name="currency">
           {{range .ToCurrencyList}}
             <option value="{{.ID}}"{{if eq .ID $currency.ID}} selected{{end}}>{{.Name}}</option>
@@ -14,7 +14,7 @@
         </select>
       </div>
       <div class="field-wrapper">
-        <button>Update Currency</button>
+        <button disabled>Update Currency</button>
       </div>
     </form>
     {{if .Portfolio.Currency.ID}}
@@ -78,8 +78,8 @@
         {{.Portfolio.Currency.Ticker}}
       </div>
       <div class="field-wrapper">
-        <button data-format-action="verb" value="buy">Buy</button>
-        <button data-format-action="verb" value="sell">Sell</button>
+        <button disabled data-format-action="verb" value="buy">Buy</button>
+        <button disabled data-format-action="verb" value="sell">Sell</button>
       </div>
     </form>
   {{end}}

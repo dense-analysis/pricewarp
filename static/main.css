@@ -43,6 +43,11 @@ button.danger, .button.danger {
   background-color: rgb(94, 64, 64);
 }
 
+button[disabled] {
+  color: rgb(131, 132, 133);
+  cursor: not-allowed;
+}
+
 input, select {
   background-color: rgb(46, 55, 64);
   color: rgb(231, 232, 233);

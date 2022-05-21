@@ -1,3 +1,5 @@
+const DEBOUNCE_TIMEOUT = 100
+
 // Modal cancel buttons.
 document
   .querySelectorAll(".modal [data-cancel]")
@@ -68,6 +70,40 @@ document
             window.location.reload()
           }
         })
+    })
+  })
+
+document
+  .querySelectorAll("form")
+  .forEach(form => {
+    const requiredFields = Array.from(form.querySelectorAll('input,select'))
+      .filter(elem => elem.required)
+    const buttons = Array.from(form.querySelectorAll('button'))
+      .filter(button => button.type === 'submit')
+
+    const toggleButtonBasedOnRequiredFields = () => {
+      const allFieldsFilled = requiredFields
+        .every(elem => Boolean(elem.value))
+
+      buttons.forEach(button => {
+        button.disabled = !allFieldsFilled
+      })
+    }
+
+    toggleButtonBasedOnRequiredFields()
+
+    form.addEventListener('change', () => {
+      toggleButtonBasedOnRequiredFields()
+    })
+
+    let keyupTimer
+
+    form.addEventListener('keyup', () => {
+      clearTimeout(keyupTimer)
+
+      keyupTimer = setTimeout(() => {
+        toggleButtonBasedOnRequiredFields()
+      }, DEBOUNCE_TIMEOUT)
     })
   })
 

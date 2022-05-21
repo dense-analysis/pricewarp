@@ -13,7 +13,7 @@
         <option value="above"{{if .Alert.Above}} selected{{end}}>↑ above</option>
         <option value="below"{{if not .Alert.Above}} selected{{end}}>↓ below</option>
       </select>
-      <input name="value" class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00"{{if .Alert.Value.IsPositive}} value="{{.Alert.Value.String}}"{{end}}>
+      <input name="value" class="price" type="text" pattern="^\d*(\.\d*)?$" required placeholder="0.00"{{if .Alert.Value.IsPositive}} value="{{.Alert.Value.String}}"{{end}}>
       <select name="to">
         {{range .ToCurrencyList}}
           <option value="{{.ID}}"{{if eq .ID $alert.To.ID}} selected{{end}}>{{.Name}}</option>
@@ -25,7 +25,7 @@
         <button>Update Alert</button>
         <a class="button secondary" href="/alert">Cancel</a>
       {{else}}
-        <button>Create Alert</button>
+        <button disabled>Create Alert</button>
       {{end}}
     </div>
   </form>
