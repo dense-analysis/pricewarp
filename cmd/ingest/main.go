@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/env"
+	"github.com/shopspring/decimal"
 )
 
 type BinanceTickerResult struct {
@@ -64,7 +64,7 @@ func readPrices(results []BinanceTickerResult) []CryptoPrice {
 			if strings.HasSuffix(tickerData.Symbol, suffix) {
 				realCurrency := suffix
 
-				if suffix == "USDT" || suffix == "USDC" {
+				if suffix == "USDT" {
 					realCurrency = "USD"
 				}
 
