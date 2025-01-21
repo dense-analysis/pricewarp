@@ -15,6 +15,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var VerySmallAmount = decimal.New(1, -20)
+
 type BinanceTickerResult struct {
 	Symbol string `json:"symbol"`
 	Price  string `json:"price"`
@@ -145,6 +147,11 @@ func writePrices(transaction *database.Tx, prices []CryptoPrice) error {
 
 		if decimalErr != nil {
 			return decimalErr
+		}
+
+		// Hack a very small amount for 0 or negative prices.
+		if decimalValue.LessThanOrEqual(decimal.Zero) {
+			decimalValue = VerySmallAmount
 		}
 
 		inputRows = append(inputRows, []interface{}{
