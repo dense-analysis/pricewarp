@@ -8,13 +8,13 @@ import (
 
 // User represents a user in the database
 type User struct {
-	ID       int
+	ID       int64
 	Username string
 }
 
 // Currency represents a currency in the database
 type Currency struct {
-	ID     int
+	ID     int64
 	Ticker string
 	Name   string
 }
@@ -29,7 +29,7 @@ type Price struct {
 
 // Alert represents an alert configured by a user
 type Alert struct {
-	ID    int
+	ID    int64
 	From  Currency
 	To    Currency
 	Value decimal.Decimal

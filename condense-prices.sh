@@ -5,5 +5,5 @@ set -eu
 #shellcheck disable=SC2046
 export $(xargs < .env)
 
-PGPASSWORD="$DB_PASSWORD" psql -q -h "$DB_HOST" "$DB_NAME" "$DB_USERNAME" \
+clickhouse-client --host "$DB_HOST" --port "$DB_PORT" --user "$DB_USERNAME" --password "$DB_PASSWORD" --database "$DB_NAME" \
     < sql/condense-prices.sql

@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/env"
 	"github.com/dense-analysis/pricewarp/internal/model"
@@ -20,6 +19,7 @@ import (
 	"github.com/dense-analysis/pricewarp/internal/route/util"
 	"github.com/dense-analysis/pricewarp/internal/session"
 	"github.com/dense-analysis/pricewarp/internal/template"
+	"github.com/gorilla/mux"
 )
 
 func handleIndex(conn *database.Conn, writer http.ResponseWriter, request *http.Request) {
@@ -44,7 +44,9 @@ func addDatabaseConnection(
 		if err != nil {
 			util.RespondInternalServerError(writer, err)
 		} else {
-			defer conn.Close()
+			defer func() {
+				_ = conn.Close()
+			}()
 			f(conn, writer, request)
 		}
 	}

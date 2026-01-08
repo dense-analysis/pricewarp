@@ -25,8 +25,8 @@ func LoadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error
 }
 
 // LoadCurrencyByID loads a single by ID.
-func LoadCurrencyByID(conn *database.Conn, currency *model.Currency, currencyID int) error {
-	row := conn.QueryRow(currencyQuery+"where id = $1", currencyID)
+func LoadCurrencyByID(conn *database.Conn, currency *model.Currency, currencyID int64) error {
+	row := conn.QueryRow(currencyQuery+"where id = ?", currencyID)
 
 	return scanCurrency(row, currency)
 }

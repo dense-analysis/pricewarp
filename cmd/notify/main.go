@@ -7,73 +7,120 @@ import (
 	"io"
 	"net/smtp"
 	"os"
-	"strconv"
-	"strings"
+	"time"
 
-	"github.com/shopspring/decimal"
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/env"
+	"github.com/shopspring/decimal"
 )
 
 type CryptoAlert struct {
-	Id               int
+	Id               int64
+	UserID           int64
 	Email            string
+	FromCurrencyID   int64
 	FromCurrencyName string
+	FromCurrencyTick string
+	ToCurrencyID     int64
 	ToCurrencyName   string
+	ToCurrencyTick   string
 	Above            bool
 	Value            decimal.Decimal
+	AlertTime        time.Time
 }
 
 func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
 	rows, err := conn.Query(
 		`
 			SELECT
-				crypto_alert.id,
-				crypto_user.username,
-				from_currency.name,
-				to_currency.name,
-				above,
-				value
-			FROM crypto_alert
-			INNER JOIN crypto_user
-			ON crypto_user.id = crypto_alert.user_id
-			INNER JOIN crypto_currency AS from_currency
-			ON from_currency.id = crypto_alert."from"
-			INNER JOIN crypto_currency AS to_currency
-			ON to_currency.id = crypto_alert."to"
-			WHERE NOT sent AND EXISTS (
-				SELECT FROM crypto_price
-				WHERE crypto_price."from" = crypto_alert."from"
-				AND crypto_price."to" = crypto_alert."to"
+				alerts.alert_id,
+				alerts.user_id,
+				alerts.username,
+				alerts.from_currency_id,
+				alerts.from_currency_name,
+				alerts.from_currency_ticker,
+				alerts.to_currency_id,
+				alerts.to_currency_name,
+				alerts.to_currency_ticker,
+				alerts.above,
+				alerts.value,
+				alerts.alert_time
+			FROM (
+				SELECT
+					alert_id,
+					user_id,
+					username,
+					from_currency_id,
+					from_currency_name,
+					from_currency_ticker,
+					to_currency_id,
+					to_currency_name,
+					to_currency_ticker,
+					above,
+					value,
+					alert_time,
+					sent,
+					is_deleted
+				FROM crypto_alert
+				ORDER BY updated_at DESC
+				LIMIT 1 BY alert_id
+			) AS alerts
+			INNER JOIN (
+				SELECT
+					from_currency_id,
+					to_currency_id,
+					value,
+					time
+				FROM crypto_currency_prices
+				ORDER BY time DESC
+				LIMIT 1 BY from_currency_id, to_currency_id
+			) AS prices
+			ON prices.from_currency_id = alerts.from_currency_id
+			AND prices.to_currency_id = alerts.to_currency_id
+			WHERE alerts.is_deleted = 0
+				AND alerts.sent = 0
 				AND (
-					(crypto_alert."above" AND crypto_price.value >= crypto_alert."value")
-					OR (NOT crypto_alert."above" AND crypto_price.value <= crypto_alert."value")
+					(alerts.above = 1 AND prices.value >= alerts.value)
+					OR (alerts.above = 0 AND prices.value <= alerts.value)
 				)
-				AND crypto_price.time >= crypto_alert.time
-			)
+				AND prices.time >= alerts.alert_time
 		`,
 	)
 
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var alertList []*CryptoAlert
 
 	for rows.Next() {
 		alert := &CryptoAlert{}
-		rows.Scan(
+		var above uint8
+		var value float64
+
+		if err := rows.Scan(
 			&alert.Id,
+			&alert.UserID,
 			&alert.Email,
+			&alert.FromCurrencyID,
 			&alert.FromCurrencyName,
+			&alert.FromCurrencyTick,
+			&alert.ToCurrencyID,
 			&alert.ToCurrencyName,
-			&alert.Above,
-			&alert.Value,
-		)
+			&alert.ToCurrencyTick,
+			&above,
+			&value,
+			&alert.AlertTime,
+		); err != nil {
+			return nil, err
+		}
+		alert.Above = above == 1
+		alert.Value = decimal.NewFromFloat(value)
 		alertList = append(alertList, alert)
 	}
 
-	return alertList, nil
+	return alertList, rows.Err()
 }
 
 func sendEmail(to string, message string) error {
@@ -92,7 +139,9 @@ func sendEmail(to string, message string) error {
 		return err
 	}
 
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	var client *smtp.Client
 
@@ -183,17 +232,42 @@ Prices have changed recently:
 }
 
 func markAlertsAsSent(conn *database.Conn, alertList []*CryptoAlert) error {
-	markers := make([]string, len(alertList))
-	ids := make([]interface{}, len(alertList))
+	batch, err := conn.PrepareBatch(
+		`insert into crypto_alert
+			(alert_id, user_id, username, above, alert_time, sent, value,
+			 from_currency_id, from_currency_ticker, from_currency_name,
+			 to_currency_id, to_currency_ticker, to_currency_name,
+			 updated_at, is_deleted)
+		values (?, ?, ?, ?, ?, 1, ?,
+			?, ?, ?,
+			?, ?, ?,
+			now64(9), 0)`,
+	)
 
-	for i, alert := range alertList {
-		markers[i] = "$" + strconv.Itoa(i+1)
-		ids[i] = alert.Id
+	if err != nil {
+		return err
 	}
 
-	query := "UPDATE crypto_alert SET sent = true WHERE id IN (" + strings.Join(markers, ",") + ")"
+	for _, alert := range alertList {
+		if err := batch.Append(
+			alert.Id,
+			alert.UserID,
+			alert.Email,
+			boolToUint(alert.Above),
+			alert.AlertTime,
+			decimalToFloat(alert.Value),
+			alert.FromCurrencyID,
+			alert.FromCurrencyTick,
+			alert.FromCurrencyName,
+			alert.ToCurrencyID,
+			alert.ToCurrencyTick,
+			alert.ToCurrencyName,
+		); err != nil {
+			return err
+		}
+	}
 
-	return conn.Exec(query, ids...)
+	return batch.Send()
 }
 
 func main() {
@@ -230,4 +304,18 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+func decimalToFloat(value decimal.Decimal) float64 {
+	floatValue, _ := value.Float64()
+
+	return floatValue
+}
+
+func boolToUint(value bool) uint8 {
+	if value {
+		return 1
+	}
+
+	return 0
 }

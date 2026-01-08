@@ -4,15 +4,16 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
-	"github.com/gorilla/mux"
-	"github.com/shopspring/decimal"
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/model"
 	"github.com/dense-analysis/pricewarp/internal/route/query"
 	"github.com/dense-analysis/pricewarp/internal/route/util"
 	"github.com/dense-analysis/pricewarp/internal/session"
 	"github.com/dense-analysis/pricewarp/internal/template"
+	"github.com/gorilla/mux"
+	"github.com/shopspring/decimal"
 )
 
 var One decimal.Decimal = decimal.NewFromInt(1)
@@ -28,98 +29,104 @@ type TrackedAsset struct {
 
 var portfolioQuery = `
 select
-	currency.id,
-	currency.ticker,
-	currency.name,
+	currency_id,
+	currency_ticker,
+	currency_name,
 	cash
 from crypto_portfolio
-inner join crypto_currency as currency
-on currency.id = crypto_portfolio.currency_id
+where user_id = ?
+order by updated_at desc
+limit 1
 `
 
 func scanPortfolio(row database.Row, portfolio *model.Portfolio) error {
-	return row.Scan(
+	var cash float64
+
+	if err := row.Scan(
 		&portfolio.Currency.ID,
 		&portfolio.Currency.Ticker,
 		&portfolio.Currency.Name,
-		&portfolio.Cash,
-	)
+		&cash,
+	); err != nil {
+		return err
+	}
+
+	portfolio.Cash = decimal.NewFromFloat(cash)
+
+	return nil
 }
 
 func loadPortfolio(conn *database.Conn, user *model.User, portfolio *model.Portfolio) error {
-	row := conn.QueryRow(portfolioQuery+" where user_id = $1", user.ID)
+	row := conn.QueryRow(portfolioQuery, user.ID)
 
 	return scanPortfolio(row, portfolio)
 }
 
 var assetQuery = `
 select
-	currency.id,
-	currency.ticker,
-	currency.name,
+	currency_id,
+	currency_ticker,
+	currency_name,
 	purchased,
 	amount
 from crypto_asset
-inner join crypto_currency as currency
-on currency.id = crypto_asset."currency_id"
-`
-
-var optionalAssetQuery = `
-select
-	currency.id,
-	currency.ticker,
-	currency.name,
-	coalesce(asset.purchased, 0::numeric),
-	coalesce(asset.amount, 0::numeric)
-from crypto_currency as currency
-left join crypto_asset as asset
-on asset.currency_id = currency.id
+where user_id = ? and is_deleted = 0
+order by updated_at desc
+limit 1 by currency_id
 `
 
 func scanAsset(row database.Row, asset *model.Asset) error {
-	return row.Scan(
+	var purchased float64
+	var amount float64
+
+	if err := row.Scan(
 		&asset.Currency.ID,
 		&asset.Currency.Ticker,
 		&asset.Currency.Name,
-		&asset.Purchased,
-		&asset.Amount,
-	)
+		&purchased,
+		&amount,
+	); err != nil {
+		return err
+	}
+
+	asset.Purchased = decimal.NewFromFloat(purchased)
+	asset.Amount = decimal.NewFromFloat(amount)
+
+	return nil
 }
 
 func scanTrackedAsset(row database.Row, asset *TrackedAsset) error {
 	return scanAsset(row, &asset.Asset)
 }
 
-func loadAssetList(conn *database.Conn, userID int, assetList *[]TrackedAsset) error {
+func loadAssetList(conn *database.Conn, userID int64, assetList *[]TrackedAsset) error {
 	return model.LoadList(
 		conn,
 		assetList,
 		1,
 		scanTrackedAsset,
-		assetQuery+"where user_id = $1",
+		assetQuery,
 		userID,
 	)
 }
 
 var priceQuery = `
-select distinct on("from", "to")
-	from_currency.id,
-	from_currency.ticker,
-	from_currency.name,
-	to_currency.id,
-	to_currency.ticker,
-	to_currency.name,
+select
+	from_currency_id,
+	from_currency_ticker,
+	from_currency_name,
+	to_currency_id,
+	to_currency_ticker,
+	to_currency_name,
 	time,
 	value
-from crypto_price
-inner join crypto_currency as from_currency
-on from_currency.id = crypto_price."from"
-inner join crypto_currency as to_currency
-on to_currency.id = crypto_price."to"
+from crypto_currency_prices
 `
 
 func scanPrice(row database.Row, price *model.Price) error {
-	return row.Scan(
+	var value float64
+
+	if err := row.Scan(
 		&price.From.ID,
 		&price.From.Ticker,
 		&price.From.Name,
@@ -127,8 +134,14 @@ func scanPrice(row database.Row, price *model.Price) error {
 		&price.To.Ticker,
 		&price.To.Name,
 		&price.Time,
-		&price.Value,
-	)
+		&value,
+	); err != nil {
+		return err
+	}
+
+	price.Value = decimal.NewFromFloat(value)
+
+	return nil
 }
 
 func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []string, priceList *[]model.Price) error {
@@ -143,13 +156,8 @@ func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []s
 		priceList,
 		len(tickerList)*2,
 		scanPrice,
-		priceQuery+`
-			where from_currency.ticker = ANY($1)
-			and (to_currency.id = $2 or to_currency.ticker = 'BTC')
-			order by "from" desc, "to" desc, time desc;
-		`,
-		tickerList,
-		currency.ID,
+		buildPriceQuery(len(tickerList)),
+		buildPriceArgs(tickerList, currency.ID)...,
 	)
 }
 
@@ -225,25 +233,39 @@ func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []
 
 var assetUpdateQuery = `
 insert into crypto_asset
-(user_id, currency_id, purchased, amount)
-values ($1, $2, $3, $4)
-on conflict (user_id, currency_id) do update
-set purchased = $3, amount = $4
+	(user_id, username, currency_id, currency_ticker, currency_name, purchased, amount, updated_at, is_deleted)
+values (?, ?, ?, ?, ?, ?, ?, now64(9), 0)
 `
 
 func updateAsset(conn database.Queryable, user *model.User, asset *model.Asset) error {
-	return conn.Exec(assetUpdateQuery, user.ID, asset.Currency.ID, asset.Purchased, asset.Amount)
+	return conn.Exec(
+		assetUpdateQuery,
+		user.ID,
+		user.Username,
+		asset.Currency.ID,
+		asset.Currency.Ticker,
+		asset.Currency.Name,
+		decimalToFloat(asset.Purchased),
+		decimalToFloat(asset.Amount),
+	)
 }
 
 var portfolioUpdateQuery = `
-insert into crypto_portfolio (user_id, currency_id, cash)
-values ($1, $2, $3)
-on conflict (user_id) do update
-set currency_id = $2, cash = $3
+insert into crypto_portfolio
+	(user_id, username, currency_id, currency_ticker, currency_name, cash, updated_at, is_deleted)
+values (?, ?, ?, ?, ?, ?, now64(9), 0)
 `
 
 func updatePortfolio(conn database.Queryable, user *model.User, portfolio *model.Portfolio) error {
-	return conn.Exec(portfolioUpdateQuery, user.ID, portfolio.Currency.ID, portfolio.Cash)
+	return conn.Exec(
+		portfolioUpdateQuery,
+		user.ID,
+		user.Username,
+		portfolio.Currency.ID,
+		portfolio.Currency.Ticker,
+		portfolio.Currency.Name,
+		decimalToFloat(portfolio.Cash),
+	)
 }
 
 func loadUser(conn *database.Conn, writer http.ResponseWriter, request *http.Request, user *model.User) bool {
@@ -275,7 +297,7 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 
 	request.ParseForm()
 
-	currencyID, err := strconv.Atoi(request.Form.Get("currency"))
+	currencyID, err := strconv.ParseInt(request.Form.Get("currency"), 10, 64)
 
 	if err != nil {
 		util.RespondValidationError(writer, "Invalid currency ID")
@@ -433,13 +455,7 @@ func loadAssetAdjustFormData(
 
 	ticker := mux.Vars(request)["ticker"]
 
-	row := conn.QueryRow(
-		optionalAssetQuery+" and asset.user_id = $1 where currency.ticker = $2",
-		data.User.ID,
-		ticker,
-	)
-
-	if err := scanAsset(row, &data.asset); err != nil {
+	if err := loadCurrencyByTicker(conn, &data.asset.Currency, ticker); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
@@ -447,6 +463,27 @@ func loadAssetAdjustFormData(
 		}
 
 		return false
+	}
+
+	row := conn.QueryRow(
+		`select currency_id, currency_ticker, currency_name, purchased, amount
+		from crypto_asset
+		where user_id = ? and currency_id = ? and is_deleted = 0
+		order by updated_at desc
+		limit 1`,
+		data.User.ID,
+		data.asset.Currency.ID,
+	)
+
+	if err := scanAsset(row, &data.asset); err != nil {
+		if err != database.ErrNoRows {
+			util.RespondInternalServerError(writer, err)
+
+			return false
+		}
+
+		data.asset.Purchased = decimal.Zero
+		data.asset.Amount = decimal.Zero
 	}
 
 	request.ParseForm()
@@ -489,29 +526,17 @@ func saveAssetAdjustChanges(
 	writer http.ResponseWriter,
 	request *http.Request,
 ) bool {
-	tx, err := conn.Begin()
-
-	if err != nil {
+	if err := updateAsset(conn, &data.User, &data.asset); err != nil {
 		util.RespondInternalServerError(writer, err)
 
 		return false
 	}
 
-	defer tx.Rollback()
-
-	if err := updateAsset(tx, &data.User, &data.asset); err != nil {
+	if err := updatePortfolio(conn, &data.User, &data.Portfolio); err != nil {
 		util.RespondInternalServerError(writer, err)
 
 		return false
 	}
-
-	if err := updatePortfolio(tx, &data.User, &data.Portfolio); err != nil {
-		util.RespondInternalServerError(writer, err)
-
-		return false
-	}
-
-	tx.Commit()
 
 	return true
 }
@@ -587,15 +612,7 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 
 	ticker := mux.Vars(request)["ticker"]
 
-	row := conn.QueryRow(
-		optionalAssetQuery+" and asset.user_id = $1 where currency.ticker = $2",
-		data.User.ID,
-		ticker,
-	)
-
-	assetList := make([]TrackedAsset, 1)
-
-	if err := scanTrackedAsset(row, &assetList[0]); err != nil {
+	if err := loadCurrencyByTicker(conn, &data.Asset.Currency, ticker); err != nil {
 		if err == database.ErrNoRows {
 			util.RespondNotFound(writer)
 		} else {
@@ -603,6 +620,30 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 		}
 
 		return
+	}
+
+	row := conn.QueryRow(
+		`select currency_id, currency_ticker, currency_name, purchased, amount
+		from crypto_asset
+		where user_id = ? and currency_id = ? and is_deleted = 0
+		order by updated_at desc
+		limit 1`,
+		data.User.ID,
+		data.Asset.Currency.ID,
+	)
+
+	assetList := make([]TrackedAsset, 1)
+
+	if err := scanTrackedAsset(row, &assetList[0]); err != nil {
+		if err != database.ErrNoRows {
+			util.RespondInternalServerError(writer, err)
+
+			return
+		}
+
+		assetList[0].Currency = data.Asset.Currency
+		assetList[0].Purchased = decimal.Zero
+		assetList[0].Amount = decimal.Zero
 	}
 
 	if err := loadAssetPrices(conn, &data.Portfolio.Currency, assetList); err != nil {
@@ -614,4 +655,50 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 	data.Asset = assetList[0]
 
 	template.Render(template.Asset, writer, data)
+}
+
+func decimalToFloat(value decimal.Decimal) float64 {
+	floatValue, _ := value.Float64()
+
+	return floatValue
+}
+
+func buildPriceQuery(tickerCount int) string {
+	return priceQuery + `
+	where from_currency_ticker in (` + makePlaceholders(tickerCount) + `)
+		and (to_currency_id = ? or to_currency_ticker = 'BTC')
+	order by time desc
+	limit 1 by from_currency_ticker, to_currency_ticker`
+}
+
+func buildPriceArgs(tickerList []string, toCurrencyID int64) []any {
+	args := make([]any, 0, len(tickerList)+1)
+
+	for _, ticker := range tickerList {
+		args = append(args, ticker)
+	}
+
+	args = append(args, toCurrencyID)
+
+	return args
+}
+
+func makePlaceholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+
+	placeholders := make([]string, count)
+
+	for i := 0; i < count; i++ {
+		placeholders[i] = "?"
+	}
+
+	return strings.Join(placeholders, ", ")
+}
+
+func loadCurrencyByTicker(conn *database.Conn, currency *model.Currency, ticker string) error {
+	row := conn.QueryRow("select id, ticker, name from crypto_currency where ticker = ?", ticker)
+
+	return row.Scan(&currency.ID, &currency.Ticker, &currency.Name)
 }

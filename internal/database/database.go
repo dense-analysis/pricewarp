@@ -1,164 +1,112 @@
-// Package database wraps the database implmementation used for Pricewarp
+// Package database wraps the database implementation used for Pricewarp.
 package database
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"os"
+	"time"
 
-	"github.com/jackc/pgtype"
-	shopspring "github.com/jackc/pgtype/ext/shopspring-numeric"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/ClickHouse/clickhouse-go/v2"
 )
 
 type Conn struct {
-	pgxConn *pgxpool.Conn
-}
-type Tx struct {
-	pgxTx pgx.Tx
+	chConn clickhouse.Conn
 }
 
-type Row = pgx.Row
-type Rows = pgx.Rows
-type Batch = pgx.Batch
-type BatchResults = pgx.BatchResults
+type Row interface {
+	Scan(dest ...any) error
+}
 
-var ErrNoRows = pgx.ErrNoRows
+type Rows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Close() error
+	Err() error
+}
 
-func afterConnect(context context.Context, conn *pgx.Conn) error {
-	// Set up a decimal type for prices.
-	conn.ConnInfo().RegisterDataType(pgtype.DataType{
-		Value: &shopspring.Numeric{},
-		Name:  "numeric",
-		OID:   pgtype.NumericOID,
+type Batch interface {
+	Append(values ...any) error
+	Send() error
+}
+
+var ErrNoRows = clickhouse.ErrNoRows
+
+// Connect connects to the ClickHouse database with the project environment variables.
+func Connect() (*Conn, error) {
+	address := fmt.Sprintf("%s:%s", os.Getenv("DB_HOST"), os.Getenv("DB_PORT"))
+	conn, err := clickhouse.Open(&clickhouse.Options{
+		Addr: []string{address},
+		Auth: clickhouse.Auth{
+			Database: os.Getenv("DB_NAME"),
+			Username: os.Getenv("DB_USERNAME"),
+			Password: os.Getenv("DB_PASSWORD"),
+		},
+		DialTimeout: time.Second * 5,
 	})
 
-	return nil
-}
-
-// Connect connects to the Postgres database with the project environment variables
-func Connect() (*Conn, error) {
-	config, err := pgxpool.ParseConfig(fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s",
-		os.Getenv("DB_USERNAME"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
-	))
-
 	if err != nil {
 		return nil, err
 	}
 
-	config.AfterConnect = afterConnect
-
-	pool, err := pgxpool.ConnectConfig(context.Background(), config)
-
-	if err != nil {
+	if err := conn.Ping(context.Background()); err != nil {
 		return nil, err
 	}
 
-	conn, err := pool.Acquire(context.Background())
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &Conn{conn}, nil
+	return &Conn{chConn: conn}, nil
 }
 
-// Close closes a database connection
-func (conn *Conn) Close() {
-	conn.pgxConn.Release()
+// Close closes a database connection.
+func (conn *Conn) Close() error {
+	return conn.chConn.Close()
 }
 
-// Exec executes a database query
+// Exec executes a database query.
 func (conn *Conn) Exec(sql string, arguments ...any) error {
-	_, err := conn.pgxConn.Exec(context.Background(), sql, arguments...)
-
-	return err
+	return conn.chConn.Exec(context.Background(), sql, arguments...)
 }
 
-// Query executes a database query
+// Query executes a database query.
 func (conn *Conn) Query(sql string, arguments ...any) (Rows, error) {
-	return conn.pgxConn.Query(context.Background(), sql, arguments...)
+	return conn.chConn.Query(context.Background(), sql, arguments...)
 }
 
-// QueryRow executes a database query returning Row data
+// QueryRow executes a database query returning Row data.
 func (conn *Conn) QueryRow(sql string, arguments ...any) Row {
-	return conn.pgxConn.QueryRow(context.Background(), sql, arguments...)
+	return conn.chConn.QueryRow(context.Background(), sql, arguments...)
 }
 
-// SendBatch send a series of queries in a batch.
-func (conn *Conn) SendBatch(batch *Batch) BatchResults {
-	return conn.pgxConn.SendBatch(context.Background(), batch)
+// PrepareBatch prepares an insert batch for ClickHouse.
+func (conn *Conn) PrepareBatch(sql string) (Batch, error) {
+	return conn.chConn.PrepareBatch(context.Background(), sql)
 }
 
-// CopyFrom copies rows into a database.
-func (conn *Conn) CopyFrom(tableName string, columNames []string, rows [][]any) (int64, error) {
-	return conn.pgxConn.CopyFrom(context.Background(), pgx.Identifier{tableName}, columNames, pgx.CopyFromRows(rows))
+// Queryable defines an interface for a connection.
+type Queryable interface {
+	Exec(sql string, arguments ...any) error
+	Query(sql string, arguments ...any) (Rows, error)
+	QueryRow(sql string, arguments ...any) Row
 }
 
-// Begin starts a new transaction
-func (conn *Conn) Begin() (*Tx, error) {
-	tx, err := conn.pgxConn.Begin(context.Background())
+// HashID returns a stable int64 identifier for the provided value.
+func HashID(value string) int64 {
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(value))
+
+	return int64(hasher.Sum64())
+}
+
+// RandomID generates a random int64 identifier.
+func RandomID() (int64, error) {
+	var buffer [8]byte
+	_, err := rand.Read(buffer[:])
 
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	return &Tx{tx}, err
-}
-
-// Commit commits a transaction to the database
-func (tx *Tx) Commit() error {
-	return tx.pgxTx.Commit(context.Background())
-}
-
-// Rollback cancels a transaction in the database
-func (tx *Tx) Rollback() error {
-	return tx.pgxTx.Rollback(context.Background())
-}
-
-// Exec executes a database query
-func (tx *Tx) Exec(sql string, arguments ...any) error {
-	_, err := tx.pgxTx.Exec(context.Background(), sql, arguments...)
-
-	return err
-}
-
-// Query executes a database query
-func (tx *Tx) Query(sql string, arguments ...any) (Rows, error) {
-	return tx.pgxTx.Query(context.Background(), sql, arguments...)
-}
-
-// QueryRow executes a database query returning Row data
-func (tx *Tx) QueryRow(sql string, arguments ...any) Row {
-	return tx.pgxTx.QueryRow(context.Background(), sql, arguments...)
-}
-
-// SendBatch send a series of queries in a batch.
-func (tx *Tx) SendBatch(batch *Batch) BatchResults {
-	return tx.pgxTx.SendBatch(context.Background(), batch)
-}
-
-// CopyFrom copies rows into a database.
-func (tx *Tx) CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error) {
-	return tx.pgxTx.CopyFrom(context.Background(), pgx.Identifier{tableName}, columNames, pgx.CopyFromRows(rows))
-}
-
-// Queryable defines an interface for either a connection or a transaction
-type Queryable interface {
-	// Exec executes a database query
-	Exec(sql string, arguments ...any) error
-	// QueryRow executes a database query
-	Query(sql string, arguments ...any) (Rows, error)
-	// QueryRow executes a database query returning Row data
-	QueryRow(sql string, arguments ...any) Row
-	// SendBatch send a series of queries in a batch.
-	SendBatch(batch *Batch) BatchResults
-	// CopyFrom copies rows into a database.
-	CopyFrom(tableName string, columNames []string, rows [][]interface{}) (int64, error)
+	return int64(binary.BigEndian.Uint64(buffer[:])), nil
 }

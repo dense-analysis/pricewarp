@@ -5,50 +5,83 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
-	"github.com/shopspring/decimal"
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/model"
 	"github.com/dense-analysis/pricewarp/internal/route/query"
 	"github.com/dense-analysis/pricewarp/internal/route/util"
 	"github.com/dense-analysis/pricewarp/internal/session"
 	"github.com/dense-analysis/pricewarp/internal/template"
+	"github.com/gorilla/mux"
+	"github.com/shopspring/decimal"
 )
 
 var alertQuery = `
 select
-	crypto_alert.id,
+	alert_id,
 	above,
-	time,
+	alert_time,
 	sent,
 	value,
-	from_currency.id,
-	from_currency.ticker,
-	from_currency.name,
-	to_currency.id,
-	to_currency.ticker,
-	to_currency.name
-from crypto_alert
-inner join crypto_currency as from_currency
-on from_currency.id = crypto_alert."from"
-inner join crypto_currency as to_currency
-on to_currency.id = crypto_alert."to"
+	from_currency_id,
+	from_currency_ticker,
+	from_currency_name,
+	to_currency_id,
+	to_currency_ticker,
+	to_currency_name,
+	is_deleted
+from (
+	select
+		alert_id,
+		above,
+		alert_time,
+		sent,
+		value,
+		from_currency_id,
+		from_currency_ticker,
+		from_currency_name,
+		to_currency_id,
+		to_currency_ticker,
+		to_currency_name,
+		is_deleted
+	from crypto_alert
+	where user_id = ?
+	order by updated_at desc
+	limit 1 by alert_id
+)
 `
 
 func scanAlert(row database.Row, alert *model.Alert) error {
-	return row.Scan(
+	var value float64
+	var above uint8
+	var sent uint8
+	var isDeleted uint8
+
+	if err := row.Scan(
 		&alert.ID,
-		&alert.Above,
+		&above,
 		&alert.Time,
-		&alert.Sent,
-		&alert.Value,
+		&sent,
+		&value,
 		&alert.From.ID,
 		&alert.From.Ticker,
 		&alert.From.Name,
 		&alert.To.ID,
 		&alert.To.Ticker,
 		&alert.To.Name,
-	)
+		&isDeleted,
+	); err != nil {
+		return err
+	}
+
+	if isDeleted == 1 {
+		return database.ErrNoRows
+	}
+
+	alert.Above = above == 1
+	alert.Sent = sent == 1
+	alert.Value = decimal.NewFromFloat(value)
+
+	return nil
 }
 
 var currencyQuery = `select id, ticker, name from crypto_currency `
@@ -57,13 +90,13 @@ func scanCurrency(row database.Row, currency *model.Currency) error {
 	return row.Scan(&currency.ID, &currency.Ticker, &currency.Name)
 }
 
-func loadAlertList(conn *database.Conn, userID int, alertList *[]model.Alert) error {
+func loadAlertList(conn *database.Conn, userID int64, alertList *[]model.Alert) error {
 	return model.LoadList(
 		conn,
 		alertList,
 		1,
 		scanAlert,
-		alertQuery+"where user_id = $1 order by time",
+		alertQuery+"where is_deleted = 0 order by alert_time",
 		userID,
 	)
 }
@@ -135,7 +168,7 @@ func loadAlertForRequest(
 	user *model.User,
 	alert *model.Alert,
 ) bool {
-	alertID, err := strconv.Atoi(mux.Vars(request)["id"])
+	alertID, err := strconv.ParseInt(mux.Vars(request)["id"], 10, 64)
 
 	if err != nil {
 		util.RespondNotFound(writer)
@@ -143,7 +176,27 @@ func loadAlertForRequest(
 		return false
 	}
 
-	row := conn.QueryRow(alertQuery+" where user_id = $1 and crypto_alert.id = $2", user.ID, alertID)
+	row := conn.QueryRow(
+		`select
+			alert_id,
+			above,
+			alert_time,
+			sent,
+			value,
+			from_currency_id,
+			from_currency_ticker,
+			from_currency_name,
+			to_currency_id,
+			to_currency_ticker,
+			to_currency_name,
+			is_deleted
+		from crypto_alert
+		where user_id = ? and alert_id = ?
+		order by updated_at desc
+		limit 1`,
+		user.ID,
+		alertID,
+	)
 
 	if err := scanAlert(row, alert); err != nil {
 		if err == database.ErrNoRows {
@@ -187,7 +240,7 @@ func loadAlertFromForm(
 	var err error
 	request.ParseForm()
 
-	from, err := strconv.Atoi(request.Form.Get("from"))
+	from, err := strconv.ParseInt(request.Form.Get("from"), 10, 64)
 
 	if err != nil {
 		util.RespondValidationError(writer, "Invalid from currency ID")
@@ -195,7 +248,7 @@ func loadAlertFromForm(
 		return false
 	}
 
-	to, err := strconv.Atoi(request.Form.Get("to"))
+	to, err := strconv.ParseInt(request.Form.Get("to"), 10, 64)
 
 	if err != nil {
 		util.RespondValidationError(writer, "Invalid to currency ID")
@@ -235,7 +288,7 @@ func loadAlertFromForm(
 
 	var row database.Row
 
-	row = conn.QueryRow(currencyQuery+"where id = $1", from)
+	row = conn.QueryRow(currencyQuery+"where id = ?", from)
 
 	if err := scanCurrency(row, &alert.From); err != nil {
 		util.RespondInternalServerError(writer, err)
@@ -243,7 +296,7 @@ func loadAlertFromForm(
 		return false
 	}
 
-	row = conn.QueryRow(currencyQuery+"where id = $1", to)
+	row = conn.QueryRow(currencyQuery+"where id = ?", to)
 
 	if err := scanCurrency(row, &alert.To); err != nil {
 		util.RespondInternalServerError(writer, err)
@@ -265,12 +318,40 @@ func HandleSubmitAlert(conn *database.Conn, writer http.ResponseWriter, request 
 	}
 
 	if loadAlertFromForm(conn, writer, request, &alert) {
+		alertID, err := database.RandomID()
+
+		if err != nil {
+			util.RespondInternalServerError(writer, err)
+
+			return
+		}
+
 		insertSQL := `
-		insert into crypto_alert(user_id, above, time, sent, value, "from", "to")
-		values ($1, $2, NOW(), false, $3, $4, $5)
+		insert into crypto_alert
+			(alert_id, user_id, username, above, alert_time, sent, value,
+			 from_currency_id, from_currency_ticker, from_currency_name,
+			 to_currency_id, to_currency_ticker, to_currency_name,
+			 updated_at, is_deleted)
+		values (?, ?, ?, ?, now64(9), 0, ?,
+			?, ?, ?,
+			?, ?, ?,
+			now64(9), 0)
 		`
 
-		if err := conn.Exec(insertSQL, user.ID, alert.Above, alert.Value, alert.From.ID, alert.To.ID); err != nil {
+		if err := conn.Exec(
+			insertSQL,
+			alertID,
+			user.ID,
+			user.Username,
+			boolToUint(alert.Above),
+			decimalToFloat(alert.Value),
+			alert.From.ID,
+			alert.From.Ticker,
+			alert.From.Name,
+			alert.To.ID,
+			alert.To.Ticker,
+			alert.To.Name,
+		); err != nil {
 			util.RespondInternalServerError(writer, err)
 		} else {
 			http.Redirect(writer, request, "/alert", http.StatusFound)
@@ -290,17 +371,31 @@ func HandleUpdateAlert(conn *database.Conn, writer http.ResponseWriter, request 
 
 	if loadAlertForRequest(conn, writer, request, &user, &alert) && loadAlertFromForm(conn, writer, request, &alert) {
 		updateSQL := `
-		update crypto_alert
-		set above = $2,
-			time = NOW(),
-			sent = false,
-			value = $3,
-			"from" = $4,
-			"to" = $5
-		where id = $1
+		insert into crypto_alert
+			(alert_id, user_id, username, above, alert_time, sent, value,
+			 from_currency_id, from_currency_ticker, from_currency_name,
+			 to_currency_id, to_currency_ticker, to_currency_name,
+			 updated_at, is_deleted)
+		values (?, ?, ?, ?, now64(9), 0, ?,
+			?, ?, ?,
+			?, ?, ?,
+			now64(9), 0)
 		`
 
-		if err := conn.Exec(updateSQL, alert.ID, alert.Above, alert.Value, alert.From.ID, alert.To.ID); err != nil {
+		if err := conn.Exec(
+			updateSQL,
+			alert.ID,
+			user.ID,
+			user.Username,
+			boolToUint(alert.Above),
+			decimalToFloat(alert.Value),
+			alert.From.ID,
+			alert.From.Ticker,
+			alert.From.Name,
+			alert.To.ID,
+			alert.To.Ticker,
+			alert.To.Name,
+		); err != nil {
 			util.RespondInternalServerError(writer, err)
 		} else {
 			http.Redirect(writer, request, "/alert", http.StatusFound)
@@ -319,10 +414,51 @@ func HandleDeleteAlert(conn *database.Conn, writer http.ResponseWriter, request 
 	}
 
 	if loadAlertForRequest(conn, writer, request, &user, &alert) {
-		if err := conn.Exec("delete from crypto_alert where id = $1", alert.ID); err != nil {
+		deleteSQL := `
+		insert into crypto_alert
+			(alert_id, user_id, username, above, alert_time, sent, value,
+			 from_currency_id, from_currency_ticker, from_currency_name,
+			 to_currency_id, to_currency_ticker, to_currency_name,
+			 updated_at, is_deleted)
+		values (?, ?, ?, ?, ?, ?, ?,
+			?, ?, ?,
+			?, ?, ?,
+			now64(9), 1)
+		`
+
+		if err := conn.Exec(
+			deleteSQL,
+			alert.ID,
+			user.ID,
+			user.Username,
+			boolToUint(alert.Above),
+			alert.Time,
+			boolToUint(alert.Sent),
+			decimalToFloat(alert.Value),
+			alert.From.ID,
+			alert.From.Ticker,
+			alert.From.Name,
+			alert.To.ID,
+			alert.To.Ticker,
+			alert.To.Name,
+		); err != nil {
 			util.RespondInternalServerError(writer, err)
 		} else {
 			writer.WriteHeader(http.StatusNoContent)
 		}
 	}
+}
+
+func decimalToFloat(value decimal.Decimal) float64 {
+	floatValue, _ := value.Float64()
+
+	return floatValue
+}
+
+func boolToUint(value bool) uint8 {
+	if value {
+		return 1
+	}
+
+	return 0
 }

@@ -20,6 +20,7 @@ func LoadList[T any](
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 
 	*list = make([]T, 0, capacity)
 	var instance T
@@ -32,5 +33,5 @@ func LoadList[T any](
 		*list = append(*list, instance)
 	}
 
-	return nil
+	return rows.Err()
 }

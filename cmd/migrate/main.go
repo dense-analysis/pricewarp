@@ -40,16 +40,21 @@ func NewMigrationExecutor(connection *database.Conn, directoryName string) (*Mig
 
 func (executor *MigrationExecutor) CreateMigrationTable() error {
 	return executor.connection.Exec(
-		"CREATE TABLE IF NOT EXISTS crypto_migration (id serial, migration_number integer NOT NULL UNIQUE);",
+		`CREATE TABLE IF NOT EXISTS crypto_migration (
+			migration_number UInt32,
+			applied_at DateTime64(9)
+		)
+		ENGINE = MergeTree
+		ORDER BY migration_number`,
 	)
 }
 
 func (executor *MigrationExecutor) CurrentMigration() (int, error) {
 	row := executor.connection.QueryRow(
-		"SELECT COALESCE(MAX(migration_number), 0) FROM crypto_migration;",
+		"SELECT COALESCE(MAX(migration_number), 0) FROM crypto_migration",
 	)
 
-	var migrationNumber int32
+	var migrationNumber uint32
 	err := row.Scan(&migrationNumber)
 
 	return int(migrationNumber), err
@@ -81,30 +86,35 @@ func (executor *MigrationExecutor) applyMigration(migrationNumber int, reverse b
 		return false, readErr
 	}
 
-	batch := &database.Batch{}
 	// NOTE: SQL functions in migration files won't work.
-	queries := strings.Split(string(file), ";\n")
+	queries := strings.Split(string(file), ";")
 
 	for _, query := range queries {
-		batch.Queue(query)
+		query = strings.TrimSpace(query)
+
+		if len(query) == 0 {
+			continue
+		}
+
+		if err := executor.connection.Exec(query); err != nil {
+			return false, err
+		}
 	}
 
 	if reverse {
-		batch.Queue(
-			"DELETE FROM crypto_migration WHERE migration_number = $1;",
-			&migrationNumber,
-		)
+		if err := executor.connection.Exec(
+			"ALTER TABLE crypto_migration DELETE WHERE migration_number = ?",
+			migrationNumber,
+		); err != nil {
+			return false, err
+		}
 	} else {
-		batch.Queue(
-			"INSERT INTO crypto_migration (migration_number) VALUES ($1) ON CONFLICT DO NOTHING;",
-			&migrationNumber,
-		)
-	}
-
-	results := executor.connection.SendBatch(batch)
-
-	if _, err := results.Exec(); err != nil {
-		return false, err
+		if err := executor.connection.Exec(
+			"INSERT INTO crypto_migration (migration_number, applied_at) VALUES (?, now64(9))",
+			migrationNumber,
+		); err != nil {
+			return false, err
+		}
 	}
 
 	return false, nil
@@ -183,7 +193,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	executor, executorErr := NewMigrationExecutor(conn, "migrations")
 
