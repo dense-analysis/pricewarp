@@ -2,7 +2,9 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +16,10 @@ import (
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/env"
 	"github.com/shopspring/decimal"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/gmail/v1"
+	"google.golang.org/api/option"
 )
 
 type CryptoAlert struct {
@@ -32,6 +38,7 @@ type CryptoAlert struct {
 const (
 	smtpDialTimeout      = 10 * time.Second
 	smtpOperationTimeout = 30 * time.Second
+	gmailRequestTimeout  = 30 * time.Second
 )
 
 func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
@@ -123,6 +130,48 @@ func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
 }
 
 func sendEmail(to string, message string) error {
+	if shouldUseGmailAPI() {
+		return sendEmailViaGmailAPI(to, message)
+	}
+
+	return sendEmailViaSMTP(to, message)
+}
+
+func shouldUseGmailAPI() bool {
+	return os.Getenv("GMAIL_OAUTH_CLIENT_ID") != "" &&
+		os.Getenv("GMAIL_OAUTH_CLIENT_SECRET") != "" &&
+		os.Getenv("GMAIL_OAUTH_REFRESH_TOKEN") != ""
+}
+
+func sendEmailViaGmailAPI(to string, message string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), gmailRequestTimeout)
+	defer cancel()
+
+	message = strings.Replace(message, "{to}", to, -1)
+	if !strings.HasPrefix(message, "To:") && !strings.Contains(message, "\nTo:") {
+		message = "To: " + to + "\n" + message
+	}
+
+	config := &oauth2.Config{
+		ClientID:     os.Getenv("GMAIL_OAUTH_CLIENT_ID"),
+		ClientSecret: os.Getenv("GMAIL_OAUTH_CLIENT_SECRET"),
+		Endpoint:     google.Endpoint,
+		Scopes:       []string{gmail.GmailSendScope},
+	}
+
+	token := &oauth2.Token{RefreshToken: os.Getenv("GMAIL_OAUTH_REFRESH_TOKEN")}
+	client := oauth2.NewClient(ctx, config.TokenSource(ctx, token))
+	service, err := gmail.NewService(ctx, option.WithHTTPClient(client))
+	if err != nil {
+		return err
+	}
+
+	encoded := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString([]byte(message))
+	_, err = service.Users.Messages.Send("me", &gmail.Message{Raw: encoded}).Do()
+	return err
+}
+
+func sendEmailViaSMTP(to string, message string) error {
 	username := os.Getenv("SMTP_USERNAME")
 	password := os.Getenv("SMTP_PASSWORD")
 	from := os.Getenv("SMTP_FROM")
@@ -267,10 +316,10 @@ func markAlertsAsSent(conn *database.Conn, alertList []*CryptoAlert) error {
 			 from_currency_ticker, from_currency_name,
 			 to_currency_ticker, to_currency_name,
 			 updated_at, is_deleted)
-		values (?, ?, ?, ?, ?, 1, ?,
+		values (?, ?, ?, ?, ?, ?, ?,
 			?, ?,
 			?, ?,
-			now64(9), 0)`,
+			?, ?)`,
 	)
 
 	if err != nil {
@@ -284,11 +333,14 @@ func markAlertsAsSent(conn *database.Conn, alertList []*CryptoAlert) error {
 			alert.Email,
 			boolToUint(alert.Above),
 			alert.AlertTime,
+			uint8(1),
 			alert.Value,
 			alert.FromCurrencyTick,
 			alert.FromCurrencyName,
 			alert.ToCurrencyTick,
 			alert.ToCurrencyName,
+			time.Now().UTC(),
+			uint8(0),
 		); err != nil {
 			return err
 		}
