@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gorilla/sessions"
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/model"
+	"github.com/gorilla/sessions"
 )
 
 var sessionStore *sessions.CookieStore
@@ -33,9 +33,13 @@ func LoadUserFromSession(conn *database.Conn, request *http.Request, user *model
 		return false, nil
 	}
 
-	if userID, ok := session.Values["userID"].(int); ok {
+	if userID, ok := session.Values["userID"].(int64); ok {
 		row := conn.QueryRow(
-			"select username from crypto_user where id = $1",
+			`select username
+			from crypto_users
+			where user_id = ?
+			order by updated_at desc
+			limit 1`,
 			userID,
 		)
 

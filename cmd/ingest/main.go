@@ -4,7 +4,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -29,7 +29,7 @@ func readBinanceTickerResults() ([]BinanceTickerResult, error) {
 		return nil, err
 	}
 
-	content, err := ioutil.ReadAll(response.Body)
+	content, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		return nil, err
@@ -90,57 +90,98 @@ func readPrices(results []BinanceTickerResult) []CryptoPrice {
 	return prices
 }
 
-func writeCurrencies(transaction *database.Tx, prices []CryptoPrice) error {
-	tickerRows, err := transaction.Query("SELECT ticker from crypto_currency")
+func writeCurrencies(conn *database.Conn, prices []CryptoPrice) error {
+	tickerRows, err := conn.Query("SELECT ticker from crypto_currencies")
 
 	if err != nil {
 		return err
 	}
+	defer tickerRows.Close()
 
 	currentTickerMap := map[string]bool{}
 
 	for tickerRows.Next() {
 		var ticker string
-		tickerRows.Scan(&ticker)
+		if err := tickerRows.Scan(&ticker); err != nil {
+			return err
+		}
 		currentTickerMap[ticker] = true
 	}
 
-	var inputRows [][]interface{}
-
-	for _, price := range prices {
-		for _, ticker := range []string{price.From, price.To} {
-			if !currentTickerMap[ticker] {
-				inputRows = append(inputRows, []interface{}{ticker, ticker})
-				currentTickerMap[ticker] = true
-			}
-		}
+	if err := tickerRows.Err(); err != nil {
+		return err
 	}
 
-	if len(inputRows) > 0 {
-		_, err = transaction.CopyFrom("crypto_currency", []string{"ticker", "name"}, inputRows)
-	}
-
-	return err
-}
-
-func writePrices(transaction *database.Tx, prices []CryptoPrice) error {
-	timestamp := time.Now()
-	tickerRows, err := transaction.Query("SELECT id, ticker from crypto_currency")
+	batch, err := conn.PrepareBatch(
+		`insert into crypto_currencies (ticker, name, updated_at)
+		values (?, ?, now64(9))`,
+	)
 
 	if err != nil {
 		return err
 	}
 
-	tickerMap := map[string]int{}
+	rowCount := 0
 
-	for tickerRows.Next() {
-		var id int
-		var ticker string
-		tickerRows.Scan(&id, &ticker)
-		tickerMap[ticker] = id
+	for _, price := range prices {
+		for _, ticker := range []string{price.From, price.To} {
+			if !currentTickerMap[ticker] {
+				if err := batch.Append(ticker, ticker); err != nil {
+					return err
+				}
+
+				rowCount += 1
+				currentTickerMap[ticker] = true
+			}
+		}
 	}
 
-	var inputRows [][]interface{}
+	if rowCount == 0 {
+		return nil
+	}
+
+	return batch.Send()
+}
+
+func writePrices(conn *database.Conn, prices []CryptoPrice) error {
+	timestamp := time.Now()
+	tickerRows, err := conn.Query("SELECT ticker, name from crypto_currencies")
+
+	if err != nil {
+		return err
+	}
+	defer tickerRows.Close()
+
+	type currencyInfo struct {
+		Name string
+	}
+	tickerMap := map[string]currencyInfo{}
+
+	for tickerRows.Next() {
+		var ticker string
+		var name string
+		if err := tickerRows.Scan(&ticker, &name); err != nil {
+			return err
+		}
+		tickerMap[ticker] = currencyInfo{Name: name}
+	}
+
+	if err := tickerRows.Err(); err != nil {
+		return err
+	}
+
+	batch, err := conn.PrepareBatch(
+		`insert into crypto_currency_prices
+			(time, from_currency_ticker, from_currency_name,
+			 to_currency_ticker, to_currency_name, value)
+		values (?, ?, ?, ?, ?, ?)`,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rowCount := 0
 
 	for _, price := range prices {
 		decimalValue, decimalErr := decimal.NewFromString(price.Value)
@@ -154,19 +195,34 @@ func writePrices(transaction *database.Tx, prices []CryptoPrice) error {
 			decimalValue = VerySmallAmount
 		}
 
-		inputRows = append(inputRows, []interface{}{
-			tickerMap[price.From],
-			tickerMap[price.To],
+		fromInfo, ok := tickerMap[price.From]
+		if !ok {
+			return fmt.Errorf("missing currency info for %s", price.From)
+		}
+		toInfo, ok := tickerMap[price.To]
+		if !ok {
+			return fmt.Errorf("missing currency info for %s", price.To)
+		}
+
+		if err := batch.Append(
 			timestamp,
+			price.From,
+			fromInfo.Name,
+			price.To,
+			toInfo.Name,
 			decimalValue,
-		})
+		); err != nil {
+			return err
+		}
+
+		rowCount += 1
 	}
 
-	if len(inputRows) > 0 {
-		_, err = transaction.CopyFrom("crypto_price", []string{"from", "to", "time", "value"}, inputRows)
+	if rowCount == 0 {
+		return nil
 	}
 
-	return err
+	return batch.Send()
 }
 
 func main() {
@@ -179,7 +235,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	tickerResults, err := readBinanceTickerResults()
 
@@ -190,28 +248,17 @@ func main() {
 
 	prices := readPrices(tickerResults)
 
-	transaction, err := conn.Begin()
+	err = writeCurrencies(conn, prices)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SQL error: %s\n", err)
 		os.Exit(1)
 	}
 
-	defer transaction.Rollback()
-
-	err = writeCurrencies(transaction, prices)
+	err = writePrices(conn, prices)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "SQL error: %s\n", err)
 		os.Exit(1)
 	}
-
-	err = writePrices(transaction, prices)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "SQL error: %s\n", err)
-		os.Exit(1)
-	}
-
-	transaction.Commit()
 }

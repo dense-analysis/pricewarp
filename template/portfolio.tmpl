@@ -9,7 +9,7 @@
         <input class="price" type="text" pattern="^\d*(\.\d*)?$" required placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
         <select name="currency">
           {{range .ToCurrencyList}}
-            <option value="{{.ID}}"{{if eq .ID $currency.ID}} selected{{end}}>{{.Name}}</option>
+            <option value="{{.Ticker}}"{{if eq .Ticker $currency.Ticker}} selected{{end}}>{{.Name}}</option>
           {{end}}
         </select>
       </div>
@@ -17,7 +17,7 @@
         <button disabled>Update Currency</button>
       </div>
     </form>
-    {{if .Portfolio.Currency.ID}}
+    {{if .Portfolio.Currency.Ticker}}
       <table class="portfolio-summary-table">
         <tbody>
           <tr>
@@ -40,7 +40,7 @@
       </table>
     {{end}}
   </div>
-  {{if .Portfolio.Currency.ID}}
+  {{if .Portfolio.Currency.Ticker}}
     <table class="price-table asset-table">
       <thead>
         <tr>

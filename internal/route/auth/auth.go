@@ -30,12 +30,16 @@ func HandleLogin(conn *database.Conn, writer http.ResponseWriter, request *http.
 	username := request.Form.Get("username")
 	password := request.Form.Get("password")
 
-	var userID int
+	var userID int64
 	loginValid := false
 
 	if len(username) > 0 && len(password) > 0 {
 		row := conn.QueryRow(
-			"select id, password from crypto_user where username = $1",
+			`select user_id, password_hash
+			from crypto_users
+			where username = ? and is_active = 1
+			order by updated_at desc
+			limit 1`,
 			username,
 		)
 

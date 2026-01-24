@@ -7,10 +7,16 @@ import (
 	"github.com/dense-analysis/pricewarp/internal/model"
 )
 
-var currencyQuery = `select id, ticker, name from crypto_currency `
+var currencyQuery = `select ticker, name from crypto_currencies `
 
 func scanCurrency(row database.Row, currency *model.Currency) error {
-	return row.Scan(&currency.ID, &currency.Ticker, &currency.Name)
+	if err := row.Scan(&currency.Ticker, &currency.Name); err != nil {
+		return err
+	}
+
+	currency.ID = database.HashID(currency.Ticker)
+
+	return nil
 }
 
 // LoadCurrencyList loads all available currencyies into a list.
@@ -24,9 +30,9 @@ func LoadCurrencyList(conn *database.Conn, currencyList *[]model.Currency) error
 	)
 }
 
-// LoadCurrencyByID loads a single by ID.
-func LoadCurrencyByID(conn *database.Conn, currency *model.Currency, currencyID int) error {
-	row := conn.QueryRow(currencyQuery+"where id = $1", currencyID)
+// LoadCurrencyByTicker loads a single by ticker.
+func LoadCurrencyByTicker(conn *database.Conn, currency *model.Currency, ticker string) error {
+	row := conn.QueryRow(currencyQuery+"where ticker = ?", ticker)
 
 	return scanCurrency(row, currency)
 }

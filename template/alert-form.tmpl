@@ -5,7 +5,7 @@
       <span>Alert me when value of</span>
       <select autofocus name="from">
         {{range .FromCurrencyList}}
-          <option value="{{.ID}}"{{if eq .ID $alert.From.ID}} selected{{end}}>{{.Name}}</option>
+          <option value="{{.Ticker}}"{{if eq .Ticker $alert.From.Ticker}} selected{{end}}>{{.Name}}</option>
         {{end}}
       </select>
       <span>goes</span>
@@ -16,7 +16,7 @@
       <input name="value" class="price" type="text" pattern="^\d*(\.\d*)?$" required placeholder="0.00"{{if .Alert.Value.IsPositive}} value="{{.Alert.Value.String}}"{{end}}>
       <select name="to">
         {{range .ToCurrencyList}}
-          <option value="{{.ID}}"{{if eq .ID $alert.To.ID}} selected{{end}}>{{.Name}}</option>
+          <option value="{{.Ticker}}"{{if eq .Ticker $alert.To.Ticker}} selected{{end}}>{{.Name}}</option>
         {{end}}
       </select>
     </div>

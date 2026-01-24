@@ -15,20 +15,17 @@ You can install this application with the following steps.
 1. Install Go 1.18
 2. Create a `.env` file in the project
 3. Run `./build.sh`
-4. Create a Postgres user and database
-5. Apply database migrations with `bin/migrate`
+4. Create a ClickHouse database and user
+5. Apply `sql/schema.sql` in ClickHouse
 
-You may wish to set up a Postgres user for development like so:
+You may wish to set up a ClickHouse database and user for development like so:
 
 ```
-sudo su postgres
-psql
-
-postgres=# CREATE ROLE some_user WITH LOGIN PASSWORD 'some_password';
-postgres=# CREATE DATABASE some_database;
-postgres=# \c some_database
-some_database=# GRANT ALL ON ALL TABLES IN SCHEMA public to some_user;
-some_database=# GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO some_user;
+clickhouse-client --multiquery <<'SQL'
+CREATE DATABASE some_database;
+CREATE USER some_user IDENTIFIED WITH sha256_password BY 'some_password';
+GRANT ALL ON some_database.* TO some_user;
+SQL
 ```
 
 Your `.env` file should look like so:
@@ -40,7 +37,7 @@ ADDRESS=:8000
 DB_USERNAME=some_user
 DB_PASSWORD=some_password
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=9000
 DB_NAME=some_database
 
 SMTP_USERNAME=email_username
@@ -64,25 +61,10 @@ It is recommended to run this program before `bin/notify`.
 ### Reducing Database Size
 
 Storing this price data can take up lots of space. You can condense the price
-data into daily average prices by running `./condense-prices.sh`.
+data into daily average prices by running `scripts/condense-prices.sh`.
 
-You can keep track of how much space your database is using like so:
-
-```
-$ sudo su postgres
-$ psql
-
-postgres=# select pg_size_pretty(pg_database_size('pricewarp'));
- pg_size_pretty 
-----------------
- 29 MB
-(1 row)
-```
-
-You can consider running `VACUUM FULL ANALYZE;` to compress the price data as 
-small as possible. Please refer to 
-[the Postgres documentataion](https://www.postgresql.org/docs/current/sql-vacuum.html)
-for information on vacuuming.
+To inspect ClickHouse storage usage, query `system.parts` for the table sizes
+and consider adding TTL rules if you want to expire older price data.
 
 ## Sending Email Alerts
 
@@ -137,14 +119,6 @@ price data and send email alerts.
   */10    *  *   *   *     cd /your/dir && bin/ingest
   1-59/10 *  *   *   *     cd /your/dir && bin/notify
   2       0  *   *   *     cd /your/dir && ./condense-prices.sh
-```
-
-You should configure Postgres to vacuum deleted rows for the database, or space
-will not be reclaimed for condensed prices. You could use the following in the
-crontab for the `postgres` user.
-
-```cron
-  3       0  *   *   *     psql pricewarp -qc 'vacuum full analyze;'
 ```
 
 You could start your server right away with `nohup`.

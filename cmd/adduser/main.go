@@ -41,10 +41,35 @@ func main() {
 		os.Exit(1)
 	}
 
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	userID := database.HashID(username)
+	var existingID int64
+
+	row := conn.QueryRow(
+		`select user_id
+		from crypto_users
+		where username = ? and is_active = 1
+		order by updated_at desc
+		limit 1`,
+		username,
+	)
+
+	if err := row.Scan(&existingID); err == nil {
+		fmt.Fprintf(os.Stderr, "User already exists.\n")
+		os.Exit(1)
+	} else if err != database.ErrNoRows {
+		fmt.Fprintf(os.Stderr, "Query error: %s\n", err)
+		os.Exit(1)
+	}
 
 	err = conn.Exec(
-		"insert into crypto_user(username, password) values($1, $2)",
+		`insert into crypto_users
+			(user_id, username, password_hash, created_at, updated_at, is_active)
+		values (?, ?, ?, now64(9), now64(9), 1)`,
+		userID,
 		username,
 		string(passwordHash),
 	)
