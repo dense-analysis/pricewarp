@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/smtp"
 	"os"
 	"strings"
@@ -27,6 +28,11 @@ type CryptoAlert struct {
 	Value            decimal.Decimal
 	AlertTime        time.Time
 }
+
+const (
+	smtpDialTimeout      = 10 * time.Second
+	smtpOperationTimeout = 30 * time.Second
+)
 
 func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
 	rows, err := conn.Query(
@@ -124,22 +130,52 @@ func sendEmail(to string, message string) error {
 	port := os.Getenv("SMTP_PORT")
 	tlsconfig := &tls.Config{ServerName: host}
 	auth := smtp.PlainAuth("", username, password, host)
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
 
-	var conn *tls.Conn
+	addr := host + ":" + port
+	var client *smtp.Client
 	var err error
 
-	if conn, err = tls.Dial("tcp", host+":"+port, tlsconfig); err != nil {
-		return err
-	}
+	if port == "465" {
+		var conn *tls.Conn
+		if conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsconfig); err != nil {
+			return err
+		}
 
-	defer func() {
-		_ = conn.Close()
-	}()
+		if err := conn.SetDeadline(time.Now().Add(smtpOperationTimeout)); err != nil {
+			_ = conn.Close()
+			return err
+		}
 
-	var client *smtp.Client
+		defer func() {
+			_ = conn.Close()
+		}()
 
-	if client, err = smtp.NewClient(conn, host); err != nil {
-		return err
+		if client, err = smtp.NewClient(conn, host); err != nil {
+			return err
+		}
+	} else {
+		var conn net.Conn
+		if conn, err = dialer.Dial("tcp", addr); err != nil {
+			return err
+		}
+
+		if err := conn.SetDeadline(time.Now().Add(smtpOperationTimeout)); err != nil {
+			_ = conn.Close()
+			return err
+		}
+
+		defer func() {
+			_ = conn.Close()
+		}()
+
+		if client, err = smtp.NewClient(conn, host); err != nil {
+			return err
+		}
+		if err = client.StartTLS(tlsconfig); err != nil {
+			_ = client.Close()
+			return err
+		}
 	}
 
 	defer client.Close()
