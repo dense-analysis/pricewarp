@@ -6,7 +6,7 @@ set -eu
 export $(xargs < .env)
 
 # Use the HOME directory ClickHouse client if we can't find it.
-if ! commmand -v clickhouse-client &> /dev/null; then
+if ! command -v clickhouse-client &> /dev/null; then
     clickhouse-client() {
         ~/clickhouse/clickhouse client "$@"
     }

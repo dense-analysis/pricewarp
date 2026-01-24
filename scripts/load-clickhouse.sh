@@ -5,7 +5,7 @@ set -euo pipefail
 # shellcheck disable=SC2046
 export $(xargs < .env)
 
-if ! commmand -v clickhouse-client &> /dev/null; then
+if ! command -v clickhouse-client &> /dev/null; then
     clickhouse-client() {
         ~/clickhouse/clickhouse client "$@"
     }

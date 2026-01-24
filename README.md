@@ -14,7 +14,7 @@ You can install this application with the following steps.
 
 1. Install Go 1.18
 2. Create a `.env` file in the project
-3. Run `./build.sh`
+3. Run `scripts/build.sh`
 4. Create a ClickHouse database and user
 5. Apply `sql/schema.sql` in ClickHouse
 
