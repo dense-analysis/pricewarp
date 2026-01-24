@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,11 +38,28 @@ func readBinanceTickerResults() ([]BinanceTickerResult, error) {
 
 	var results []BinanceTickerResult
 
-	if err := json.Unmarshal(content, &results); err != nil {
-		return nil, err
+	if err := json.Unmarshal(content, &results); err == nil {
+		return results, nil
 	}
 
-	return results, nil
+	var apiError struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+
+	if err := json.Unmarshal(content, &apiError); err == nil && apiError.Msg != "" {
+		return nil, fmt.Errorf("binance api error: %d %s", apiError.Code, apiError.Msg)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.UseNumber()
+	var payload map[string]any
+
+	if err := decoder.Decode(&payload); err == nil {
+		return nil, fmt.Errorf("binance api returned unexpected payload: %v", payload)
+	}
+
+	return nil, fmt.Errorf("binance api returned unexpected response: %s", string(content))
 }
 
 type CryptoPrice struct {
