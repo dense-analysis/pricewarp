@@ -59,18 +59,6 @@ func loadPortfolio(conn *database.Conn, user *model.User, portfolio *model.Portf
 	return scanPortfolio(row, portfolio)
 }
 
-var assetQuery = `
-select
-	currency_ticker,
-	currency_name,
-	purchased,
-	amount
-from crypto_asset
-where user_id = ? and is_deleted = 0
-order by updated_at desc
-limit 1 by currency_ticker
-`
-
 func scanAsset(row database.Row, asset *model.Asset) error {
 	var purchased decimal.Decimal
 	var amount decimal.Decimal
@@ -100,7 +88,17 @@ func loadAssetList(conn *database.Conn, userID int64, assetList *[]TrackedAsset)
 		assetList,
 		1,
 		scanTrackedAsset,
-		assetQuery,
+		`
+		select
+			currency_ticker,
+			currency_name,
+			purchased,
+			amount
+		from crypto_asset
+		where user_id = ?
+		order by updated_at desc
+		limit 1 by currency_ticker
+		`,
 		userID,
 	)
 }
@@ -234,8 +232,8 @@ func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []
 
 var assetUpdateQuery = `
 insert into crypto_asset
-	(user_id, username, currency_ticker, currency_name, purchased, amount, updated_at, is_deleted)
-values (?, ?, ?, ?, ?, ?, now64(9), 0)
+	(user_id, username, currency_ticker, currency_name, purchased, amount, updated_at)
+values (?, ?, ?, ?, ?, ?, now64(9))
 `
 
 func updateAsset(conn database.Queryable, user *model.User, asset *model.Asset) error {
@@ -252,8 +250,8 @@ func updateAsset(conn database.Queryable, user *model.User, asset *model.Asset) 
 
 var portfolioUpdateQuery = `
 insert into crypto_portfolio
-	(user_id, username, currency_ticker, currency_name, cash, updated_at, is_deleted)
-values (?, ?, ?, ?, ?, now64(9), 0)
+	(user_id, username, currency_ticker, currency_name, cash, updated_at)
+values (?, ?, ?, ?, ?, now64(9))
 `
 
 func updatePortfolio(conn database.Queryable, user *model.User, portfolio *model.Portfolio) error {
@@ -468,7 +466,7 @@ func loadAssetAdjustFormData(
 	row := conn.QueryRow(
 		`select currency_ticker, currency_name, purchased, amount
 		from crypto_asset
-		where user_id = ? and currency_ticker = ? and is_deleted = 0
+		where user_id = ? and currency_ticker = ?
 		order by updated_at desc
 		limit 1`,
 		data.User.ID,
@@ -625,7 +623,7 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 	row := conn.QueryRow(
 		`select currency_ticker, currency_name, purchased, amount
 		from crypto_asset
-		where user_id = ? and currency_ticker = ? and is_deleted = 0
+		where user_id = ? and currency_ticker = ?
 		order by updated_at desc
 		limit 1`,
 		data.User.ID,

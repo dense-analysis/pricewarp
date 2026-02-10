@@ -64,7 +64,6 @@ CREATE TABLE IF NOT EXISTS crypto_portfolio
     currency_name LowCardinality(String),
     cash Decimal(40, 20),
     updated_at DateTime64(9),
-    is_deleted UInt8
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (user_id, currency_ticker);
@@ -78,7 +77,6 @@ CREATE TABLE IF NOT EXISTS crypto_asset
     purchased Decimal(40, 20),
     amount Decimal(40, 20),
     updated_at DateTime64(9),
-    is_deleted UInt8
 )
 ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (user_id, currency_ticker);
