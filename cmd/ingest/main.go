@@ -132,7 +132,7 @@ func writeCurrencies(conn *database.Conn, prices []CryptoPrice) error {
 
 	batch, err := conn.PrepareBatch(
 		`insert into crypto_currencies (ticker, name, updated_at)
-		values (?, ?, now64(9))`,
+		values (?, ?, ?)`,
 	)
 
 	if err != nil {
@@ -144,7 +144,7 @@ func writeCurrencies(conn *database.Conn, prices []CryptoPrice) error {
 	for _, price := range prices {
 		for _, ticker := range []string{price.From, price.To} {
 			if !currentTickerMap[ticker] {
-				if err := batch.Append(ticker, ticker); err != nil {
+				if err := batch.Append(ticker, ticker, time.Now()); err != nil {
 					return err
 				}
 
