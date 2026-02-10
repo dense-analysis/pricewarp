@@ -18,7 +18,7 @@ FROM (
         to_currency_name,
         value
     FROM crypto_currency_prices
-    WHERE time < now() - INTERVAL 1 DAY
+    WHERE yearmonth < toYear(addMonths(now(), -3)) * 100 + toMonth(addMonths(now(), -3))
         AND time != toStartOfDay(time)
 )
 GROUP BY
@@ -30,5 +30,5 @@ GROUP BY
 
 -- Remove non-aggregated rows before yesterday.
 ALTER TABLE crypto_currency_prices
-    DELETE WHERE time < now() - INTERVAL 1 DAY
+    DELETE WHERE yearmonth < toYear(addMonths(now(), -3)) * 100 + toMonth(addMonths(now(), -3))
     AND time != toStartOfDay(time);

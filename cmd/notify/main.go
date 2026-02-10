@@ -56,42 +56,48 @@ func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
 				alerts.value,
 				alerts.alert_time
 			FROM (
-				SELECT
-					alert_id,
-					user_id,
-					username,
-					from_currency_name,
-					from_currency_ticker,
-					to_currency_name,
-					to_currency_ticker,
-					above,
-					value,
-					alert_time,
-					sent,
-					is_deleted
-				FROM crypto_alert
-				ORDER BY updated_at DESC
-				LIMIT 1 BY alert_id
+				SELECT *
+				FROM (
+					SELECT *
+					FROM crypto_alert
+					ORDER BY updated_at DESC
+					LIMIT 1 BY alert_id
+				)
+				-- Predicate pushdown: filter after fetching latest.
+				WHERE is_deleted = 0 AND sent = 0
 			) AS alerts
+			-- Get the latest values
 			INNER JOIN (
 				SELECT
 					from_currency_ticker,
 					to_currency_ticker,
-					value,
-					time
+					argMax(value, time) AS latest_value,
+					max(time) AS latest_time
 				FROM crypto_currency_prices
-				ORDER BY time DESC
-				LIMIT 1 BY from_currency_ticker, to_currency_ticker
+				-- Only look at most 1 month back.
+				-- We're alerting on current prices so we need to roll over at most a day.
+				-- This avoids loading old partitions.
+				PREWHERE yearmonth >= toYear(addMonths(now(), -1)) * 100 + toMonth(addMonths(now(), -1))
+				WHERE (from_currency_ticker, to_currency_ticker) IN (
+					SELECT from_currency_ticker, to_currency_ticker
+					FROM (
+						SELECT *
+						FROM crypto_alert
+						ORDER BY updated_at DESC
+						LIMIT 1 BY alert_id
+					)
+					-- Predicate pushdown: filter after fetching latest.
+					WHERE is_deleted = 0 AND sent = 0
+				)
+				GROUP BY from_currency_ticker, to_currency_ticker
 			) AS prices
 			ON prices.from_currency_ticker = alerts.from_currency_ticker
 			AND prices.to_currency_ticker = alerts.to_currency_ticker
-			WHERE alerts.is_deleted = 0
-				AND alerts.sent = 0
-				AND (
-					(alerts.above = 1 AND prices.value >= alerts.value)
-					OR (alerts.above = 0 AND prices.value <= alerts.value)
-				)
-				AND prices.time >= alerts.alert_time
+			WHERE (
+				(alerts.above = 1 AND prices.value >= alerts.value)
+				OR (alerts.above = 0 AND prices.value <= alerts.value)
+			)
+			AND prices.latest_time >= alerts.alert_time
 		`,
 	)
 

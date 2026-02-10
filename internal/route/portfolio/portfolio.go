@@ -107,17 +107,6 @@ func loadAssetList(conn *database.Conn, userID int64, assetList *[]TrackedAsset)
 	)
 }
 
-var priceQuery = `
-select
-	from_currency_ticker,
-	from_currency_name,
-	to_currency_ticker,
-	to_currency_name,
-	time,
-	value
-from crypto_currency_prices
-`
-
 func scanPrice(row database.Row, price *model.Price) error {
 	var value decimal.Decimal
 
@@ -139,6 +128,10 @@ func scanPrice(row database.Row, price *model.Price) error {
 	return nil
 }
 
+// loadPriceList Loads the latest list of prices given a list of tickers.
+//
+// The `currency.Ticker` will be used for the fiat currency conversions, and
+// more prices may be loaded so we can convert through BTC, say via USD.
 func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []string, priceList *[]model.Price) error {
 	if len(tickerList) == 0 {
 		*priceList = nil
@@ -146,13 +139,38 @@ func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []s
 		return nil
 	}
 
+	// Build args for the price query.
+	args := make([]any, 0, len(tickerList)+1)
+
+	for _, ticker := range tickerList {
+		args = append(args, ticker)
+	}
+
+	args = append(args, currency.Ticker)
+
 	return model.LoadList(
 		conn,
 		priceList,
 		len(tickerList)*2,
 		scanPrice,
-		buildPriceQuery(len(tickerList)),
-		buildPriceArgs(tickerList, currency.Ticker)...,
+		`
+			SELECT
+				from_currency_ticker,
+				argMax(from_currency_name, time) AS from_currency_name,
+				to_currency_ticker,
+				argMax(to_currency_name, time) AS to_currency_name,
+				max(time) AS latest_time,
+				argMax(value, time) AS value
+			FROM crypto_currency_prices
+			-- Only get prices from at most 3 months back.
+			-- This avoids fetching very old partitions for dead coins.
+			-- We will report these prices as 0 below.
+			PREWHERE yearmonth >= toYear(addMonths(now(), -3)) * 100 + toMonth(addMonths(now(), -3))
+			WHERE from_currency_ticker in (`+makePlaceholders(len(tickerList))+`)
+			AND (to_currency_ticker = ? or to_currency_ticker = 'BTC')
+			GROUP BY from_currency_ticker, to_currency_ticker
+		`,
+		args...,
 	)
 }
 
@@ -518,7 +536,7 @@ func saveAssetAdjustChanges(
 	conn *database.Conn,
 	data *AssetAdjustData,
 	writer http.ResponseWriter,
-	request *http.Request,
+	_ *http.Request,
 ) bool {
 	if err := updateAsset(conn, &data.User, &data.asset); err != nil {
 		util.RespondInternalServerError(writer, err)
@@ -651,26 +669,6 @@ func HandleAsset(conn *database.Conn, writer http.ResponseWriter, request *http.
 	template.Render(template.Asset, writer, data)
 }
 
-func buildPriceQuery(tickerCount int) string {
-	return priceQuery + `
-	where from_currency_ticker in (` + makePlaceholders(tickerCount) + `)
-		and (to_currency_ticker = ? or to_currency_ticker = 'BTC')
-	order by time desc
-	limit 1 by from_currency_ticker, to_currency_ticker`
-}
-
-func buildPriceArgs(tickerList []string, toCurrencyTicker string) []any {
-	args := make([]any, 0, len(tickerList)+1)
-
-	for _, ticker := range tickerList {
-		args = append(args, ticker)
-	}
-
-	args = append(args, toCurrencyTicker)
-
-	return args
-}
-
 func makePlaceholders(count int) string {
 	if count <= 0 {
 		return ""
@@ -678,7 +676,7 @@ func makePlaceholders(count int) string {
 
 	placeholders := make([]string, count)
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		placeholders[i] = "?"
 	}
 
