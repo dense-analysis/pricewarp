@@ -48,7 +48,6 @@ func scanPortfolio(row database.Row, portfolio *model.Portfolio) error {
 		return err
 	}
 
-	portfolio.Currency.ID = database.HashID(portfolio.Currency.Ticker)
 	portfolio.Cash = cash
 
 	return nil
@@ -85,7 +84,6 @@ func scanAsset(row database.Row, asset *model.Asset) error {
 		return err
 	}
 
-	asset.Currency.ID = database.HashID(asset.Currency.Ticker)
 	asset.Purchased = purchased
 	asset.Amount = amount
 
@@ -108,24 +106,14 @@ func loadAssetList(conn *database.Conn, userID int64, assetList *[]TrackedAsset)
 }
 
 func scanPrice(row database.Row, price *model.Price) error {
-	var value decimal.Decimal
-
-	if err := row.Scan(
+	return row.Scan(
 		&price.From.Ticker,
 		&price.From.Name,
 		&price.To.Ticker,
 		&price.To.Name,
 		&price.Time,
-		&value,
-	); err != nil {
-		return err
-	}
-
-	price.From.ID = database.HashID(price.From.Ticker)
-	price.To.ID = database.HashID(price.To.Ticker)
-	price.Value = value
-
-	return nil
+		&price.Value,
+	)
 }
 
 // loadPriceList Loads the latest list of prices given a list of tickers.
@@ -397,7 +385,7 @@ func HandlePortfolio(conn *database.Conn, writer http.ResponseWriter, request *h
 		return
 	}
 
-	data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
+	data.ToCurrencyList = query.GetToCurrencyList()
 
 	if data.Portfolio.Currency.Ticker != "" {
 		// Only load assets once a currency has been set.
@@ -686,11 +674,5 @@ func makePlaceholders(count int) string {
 func loadCurrencyByTicker(conn *database.Conn, currency *model.Currency, ticker string) error {
 	row := conn.QueryRow("select ticker, name from crypto_currencies where ticker = ?", ticker)
 
-	if err := row.Scan(&currency.Ticker, &currency.Name); err != nil {
-		return err
-	}
-
-	currency.ID = database.HashID(currency.Ticker)
-
-	return nil
+	return row.Scan(&currency.Ticker, &currency.Name)
 }

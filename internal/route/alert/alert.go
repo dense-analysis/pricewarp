@@ -74,8 +74,6 @@ func scanAlert(row database.Row, alert *model.Alert) error {
 	alert.Above = above == 1
 	alert.Sent = sent == 1
 	alert.Value = value
-	alert.From.ID = database.HashID(alert.From.Ticker)
-	alert.To.ID = database.HashID(alert.To.Ticker)
 
 	return nil
 }
@@ -86,8 +84,6 @@ func scanCurrency(row database.Row, currency *model.Currency) error {
 	if err := row.Scan(&currency.Ticker, &currency.Name); err != nil {
 		return err
 	}
-
-	currency.ID = database.HashID(currency.Ticker)
 
 	return nil
 }
@@ -159,7 +155,7 @@ func HandleAlertList(conn *database.Conn, writer http.ResponseWriter, request *h
 		return
 	}
 
-	data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
+	data.ToCurrencyList = query.GetToCurrencyList()
 	template.Render(template.AlertList, writer, data)
 }
 
@@ -225,7 +221,7 @@ func HandleAlert(conn *database.Conn, writer http.ResponseWriter, request *http.
 		if err := loadCurrencyList(conn, &data.FromCurrencyList); err != nil {
 			util.RespondInternalServerError(writer, err)
 		} else {
-			data.ToCurrencyList = query.BuildToCurrencyList(data.FromCurrencyList)
+			data.ToCurrencyList = query.GetToCurrencyList()
 			template.Render(template.Alert, writer, data)
 		}
 	}

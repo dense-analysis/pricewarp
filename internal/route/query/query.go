@@ -1,7 +1,7 @@
 package query
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/dense-analysis/pricewarp/internal/database"
 	"github.com/dense-analysis/pricewarp/internal/model"
@@ -10,13 +10,7 @@ import (
 var currencyQuery = `select ticker, name from crypto_currencies `
 
 func scanCurrency(row database.Row, currency *model.Currency) error {
-	if err := row.Scan(&currency.Ticker, &currency.Name); err != nil {
-		return err
-	}
-
-	currency.ID = database.HashID(currency.Ticker)
-
-	return nil
+	return row.Scan(&currency.Ticker, &currency.Name)
 }
 
 // LoadCurrencyList loads all available currencyies into a list.
@@ -37,60 +31,14 @@ func LoadCurrencyByTicker(conn *database.Conn, currency *model.Currency, ticker 
 	return scanCurrency(row, currency)
 }
 
-func indexOfString(array []string, element string) int {
-	for i, v := range array {
-		if element == v {
-			return i
-		}
-	}
-
-	return -1
+var toCurrencies = []model.Currency{
+	{Ticker: "USD", Name: "USD"},
+	{Ticker: "GBP", Name: "GBP"},
+	{Ticker: "BTC", Name: "BTC"},
 }
 
-var toCurrencyTickers = []string{
-	"USD",
-	"GBP",
-	"BTC",
-}
-
-type byTickerOrder []model.Currency
-
-func (a byTickerOrder) Len() int {
-	return len(a)
-}
-
-func (a byTickerOrder) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
-}
-
-func (a byTickerOrder) Less(i, j int) bool {
-	leftIndex := indexOfString(toCurrencyTickers, a[i].Ticker)
-	rightIndex := indexOfString(toCurrencyTickers, a[j].Ticker)
-
-	return leftIndex < rightIndex
-}
-
-func isToCurrency(currency *model.Currency) bool {
-	for _, ticker := range toCurrencyTickers {
-		if currency.Ticker == ticker {
-			return true
-		}
-	}
-
-	return false
-}
-
-// BuildToCurrencyList creates a new list of only the availalbe "to" currencies for a portfolio
-func BuildToCurrencyList(currencyList []model.Currency) []model.Currency {
-	fiatCurrencyList := make([]model.Currency, 0, len(toCurrencyTickers))
-
-	for _, currency := range currencyList {
-		if isToCurrency(&currency) {
-			fiatCurrencyList = append(fiatCurrencyList, currency)
-		}
-	}
-
-	sort.Sort(byTickerOrder(fiatCurrencyList))
-
-	return fiatCurrencyList
+// GetToCurrencyList returns all of the currencies that can be used as a basis of conversion for a portfolio.
+// The list is computed at runtime and requires no database access.
+func GetToCurrencyList() []model.Currency {
+	return slices.Clone(toCurrencies)
 }
