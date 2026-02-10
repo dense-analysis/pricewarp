@@ -89,15 +89,19 @@ func loadAssetList(conn *database.Conn, userID int64, assetList *[]TrackedAsset)
 		1,
 		scanTrackedAsset,
 		`
-		select
+		SELECT
 			currency_ticker,
 			currency_name,
 			purchased,
 			amount
-		from crypto_asset
-		where user_id = ?
-		order by updated_at desc
-		limit 1 by currency_ticker
+		FROM (
+			SELECT *
+			FROM crypto_asset
+			WHERE user_id = ?
+			ORDER BY updated_at DESC
+			LIMIT 1 BY currency_ticker
+		)
+		WHERE amount > 0
 		`,
 		userID,
 	)
