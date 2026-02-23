@@ -152,11 +152,14 @@ You can set cron rules to start the server up on boot, and to periodically load
 price data and send email alerts.
 
 ```cron
-@reboot cd /your/dir && bin/pricewarp &> server.log
-
-  */10    *  *   *   *     cd /your/dir && bin/ingest
-  1-59/10 *  *   *   *     cd /your/dir && bin/notify
-  2       0  *   *   *     cd /your/dir && ./condense-prices.sh
+# Start pricewarp at server start
+@reboot                    cd /your/dir && bin/pricewarp &> server.log
+# Ingest new prices every 10 minutes from minute 1.
+1-59/10   *  *   *   *     cd /your/dir && bin/ingest
+# Ingest new prices every 10 minutes from minute 2.
+2-59/10   *  *   *   *     cd /your/dir && bin/notify
+# Condence prices during the middle of the night.
+0         3  *   *   *     cd ~/pricewarp && scripts/condense-prices.sh
 ```
 
 You could start your server right away with `nohup`.
