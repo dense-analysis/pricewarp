@@ -58,6 +58,44 @@ Run `bin/ingest` to load cryptocurrency price data into the database. This
 should be run periodically to get the latest prices for cryptocurrencies.
 It is recommended to run this program before `bin/notify`.
 
+### Backfilling Missing Daily Prices From Binance
+
+You can generate ClickHouse-ready CSV files from Binance historical data and
+load them into your database with these scripts:
+
+```bash
+scripts/backfill-binance-daily.sh 2026-01-28 2026-02-21 ./data/backfill
+scripts/load-binance-backfill-csv.sh \
+  ./data/backfill/crypto_currency_prices_2026-01-28_to_2026-02-21.csv \
+  ./data/backfill/crypto_currencies_2026-01-28_to_2026-02-21.csv
+```
+
+The loader can also be run with only the prices CSV; missing currencies will
+be derived from price rows:
+
+```bash
+scripts/load-binance-backfill-csv.sh \
+  ./data/backfill/crypto_currency_prices_2026-01-28_to_2026-02-21.csv
+```
+
+The backfill script pulls 1d spot klines directly from Binance
+`api/v3/klines`, prints HTTP/curl errors to stderr, computes a daily average
+as `(open + high + low + close) / 4`, normalizes `USDT` quotes to `USD` to
+match ingest behavior, and writes CSV files with headers for direct
+ClickHouse import.
+
+For a quick test run, set `SYMBOL_LIMIT`:
+
+```bash
+SYMBOL_LIMIT=20 scripts/backfill-binance-daily.sh 2026-01-28 2026-02-21 ./data/backfill
+```
+
+To slow request rate, set `REQUEST_DELAY_SECONDS` (default `0.05`):
+
+```bash
+REQUEST_DELAY_SECONDS=0.1 scripts/backfill-binance-daily.sh 2026-01-28 2026-02-21 ./data/backfill
+```
+
 ### Reducing Database Size
 
 Storing this price data can take up lots of space. You can condense the price
