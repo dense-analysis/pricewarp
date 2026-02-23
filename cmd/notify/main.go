@@ -94,8 +94,8 @@ func findAlertsToTrigger(conn *database.Conn) ([]*CryptoAlert, error) {
 			ON prices.from_currency_ticker = alerts.from_currency_ticker
 			AND prices.to_currency_ticker = alerts.to_currency_ticker
 			WHERE (
-				(alerts.above = 1 AND prices.value >= alerts.value)
-				OR (alerts.above = 0 AND prices.value <= alerts.value)
+				(alerts.above = 1 AND prices.latest_value >= alerts.value)
+				OR (alerts.above = 0 AND prices.latest_value <= alerts.value)
 			)
 			AND prices.latest_time >= alerts.alert_time
 		`,
