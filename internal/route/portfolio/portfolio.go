@@ -1,6 +1,7 @@
 package portfolio
 
 import (
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ var Hundred decimal.Decimal = decimal.NewFromInt(100)
 // TrackedAsset is an Asset with additional information available to it.
 type TrackedAsset struct {
 	model.Asset
+	CurrentPrice     decimal.Decimal
 	Value            decimal.Decimal
 	ShareOfPortfolio decimal.Decimal
 	Performance      decimal.Decimal
@@ -107,6 +109,30 @@ func loadAssetList(conn *database.Conn, userID int64, assetList *[]TrackedAsset)
 	)
 }
 
+func loadLatestAssetList(conn *database.Conn, userID int64, assetList *[]model.Asset) error {
+	return model.LoadList(
+		conn,
+		assetList,
+		32,
+		scanAsset,
+		`
+		SELECT
+			currency_ticker,
+			currency_name,
+			purchased,
+			amount
+		FROM (
+			SELECT *
+			FROM crypto_asset
+			WHERE user_id = ?
+			ORDER BY updated_at DESC
+			LIMIT 1 BY currency_ticker
+		)
+		`,
+		userID,
+	)
+}
+
 func scanPrice(row database.Row, price *model.Price) error {
 	return row.Scan(
 		&price.From.Ticker,
@@ -164,45 +190,65 @@ func loadPriceList(conn *database.Conn, currency *model.Currency, tickerList []s
 	)
 }
 
-func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []TrackedAsset) error {
-	tickerList := make([]string, 0, len(assetList)+1)
-	tickerList = append(tickerList, "BTC")
+type priceConverter struct {
+	toCurrencyTicker string
+	currencyPrices   map[string]decimal.Decimal
+	btcPrices        map[string]decimal.Decimal
+}
 
-	for _, asset := range assetList {
-		tickerList = append(tickerList, asset.Currency.Ticker)
+func newPriceConverter(toCurrencyTicker string, priceList []model.Price) priceConverter {
+	converter := priceConverter{
+		toCurrencyTicker: toCurrencyTicker,
+		currencyPrices:   map[string]decimal.Decimal{},
+		btcPrices:        map[string]decimal.Decimal{},
 	}
-
-	var priceList []model.Price
-
-	if err := loadPriceList(conn, currency, tickerList, &priceList); err != nil {
-		return err
-	}
-
-	btcPrices := map[string]decimal.Decimal{}
-	currencyPrices := map[string]decimal.Decimal{}
 
 	for _, price := range priceList {
-		if price.To.Ticker == currency.Ticker {
-			currencyPrices[price.From.Ticker] = price.Value
+		if price.To.Ticker == toCurrencyTicker {
+			converter.currencyPrices[price.From.Ticker] = price.Value
 		} else {
-			btcPrices[price.From.Ticker] = price.Value
+			converter.btcPrices[price.From.Ticker] = price.Value
 		}
 	}
+
+	return converter
+}
+
+func (converter priceConverter) conversionMultiplier(fromTicker string) (decimal.Decimal, bool) {
+	if fromTicker == converter.toCurrencyTicker {
+		return One, true
+	}
+
+	if multiplier, ok := converter.currencyPrices[fromTicker]; ok {
+		return multiplier, true
+	}
+
+	toBtcMultiplier, ok := converter.btcPrices[fromTicker]
+
+	if !ok {
+		return decimal.Zero, false
+	}
+
+	btcToCurrencyMultiplier, ok := converter.currencyPrices["BTC"]
+
+	if !ok {
+		return decimal.Zero, false
+	}
+
+	return toBtcMultiplier.Mul(btcToCurrencyMultiplier), true
+}
+
+func applyTrackedAssetPrices(currency *model.Currency, assetList []TrackedAsset, priceList []model.Price) {
+	converter := newPriceConverter(currency.Ticker, priceList)
 
 	for i := range assetList {
 		asset := &assetList[i]
 
-		if multiplier, ok := currencyPrices[asset.Currency.Ticker]; ok {
-			// Conversion from a currency to fiat directly.
+		if multiplier, ok := converter.conversionMultiplier(asset.Currency.Ticker); ok {
+			asset.CurrentPrice = multiplier
 			asset.Value = asset.Amount.Mul(multiplier)
-		} else if toBtcMultiplier, ok := btcPrices[asset.Currency.Ticker]; ok {
-			// Conversion from a currency to fiat via Bitcoin.
-			if btcToCurrencyMultiplier, ok := currencyPrices["BTC"]; ok {
-				asset.Value = asset.Amount.Mul(toBtcMultiplier).Mul(btcToCurrencyMultiplier)
-			} else {
-				asset.Value = decimal.Zero
-			}
 		} else {
+			asset.CurrentPrice = decimal.Zero
 			asset.Value = decimal.Zero
 		}
 	}
@@ -230,6 +276,98 @@ func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []
 			asset.Performance = asset.Value.Div(asset.Purchased).Sub(One).Mul(Hundred)
 		}
 	}
+}
+
+var ErrMissingCurrencyConversion = errors.New("missing currency conversion rate")
+
+func switchPortfolioCurrencyValues(
+	portfolio *model.Portfolio,
+	assetList []model.Asset,
+	toCurrency *model.Currency,
+	priceList []model.Price,
+) error {
+	if portfolio.Currency.Ticker == "" || portfolio.Currency.Ticker == toCurrency.Ticker {
+		portfolio.Currency = *toCurrency
+
+		return nil
+	}
+
+	converter := newPriceConverter(toCurrency.Ticker, priceList)
+	multiplier, ok := converter.conversionMultiplier(portfolio.Currency.Ticker)
+
+	if !ok {
+		return ErrMissingCurrencyConversion
+	}
+
+	portfolio.Cash = portfolio.Cash.Mul(multiplier)
+
+	for i := range assetList {
+		assetList[i].Purchased = assetList[i].Purchased.Mul(multiplier)
+	}
+
+	portfolio.Currency = *toCurrency
+
+	return nil
+}
+
+func switchPortfolioCurrency(
+	conn *database.Conn,
+	user *model.User,
+	portfolio *model.Portfolio,
+	toCurrency *model.Currency,
+) error {
+	if portfolio.Currency.Ticker == "" || portfolio.Currency.Ticker == toCurrency.Ticker {
+		portfolio.Currency = *toCurrency
+
+		return nil
+	}
+
+	assetList := []model.Asset{}
+
+	if err := loadLatestAssetList(conn, user.ID, &assetList); err != nil {
+		return err
+	}
+
+	tickerList := []string{"BTC"}
+
+	if portfolio.Currency.Ticker != "BTC" {
+		tickerList = append(tickerList, portfolio.Currency.Ticker)
+	}
+
+	var priceList []model.Price
+
+	if err := loadPriceList(conn, toCurrency, tickerList, &priceList); err != nil {
+		return err
+	}
+
+	if err := switchPortfolioCurrencyValues(portfolio, assetList, toCurrency, priceList); err != nil {
+		return err
+	}
+
+	for i := range assetList {
+		if err := updateAsset(conn, user, &assetList[i]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func loadAssetPrices(conn *database.Conn, currency *model.Currency, assetList []TrackedAsset) error {
+	tickerList := make([]string, 0, len(assetList)+1)
+	tickerList = append(tickerList, "BTC")
+
+	for _, asset := range assetList {
+		tickerList = append(tickerList, asset.Currency.Ticker)
+	}
+
+	var priceList []model.Price
+
+	if err := loadPriceList(conn, currency, tickerList, &priceList); err != nil {
+		return err
+	}
+
+	applyTrackedAssetPrices(currency, assetList, priceList)
 
 	return nil
 }
@@ -296,6 +434,16 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 		return
 	}
 
+	currentPortfolio := model.Portfolio{}
+
+	if err := loadPortfolio(conn, &data.User, &currentPortfolio); err != nil {
+		if err != database.ErrNoRows {
+			util.RespondInternalServerError(writer, err)
+
+			return
+		}
+	}
+
 	request.ParseForm()
 
 	currencyTicker := request.Form.Get("currency")
@@ -335,6 +483,22 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 		}
 
 		return
+	}
+
+	if currentPortfolio.Currency.Ticker != "" {
+		currentPortfolio.Cash = data.Portfolio.Cash
+
+		if err := switchPortfolioCurrency(conn, &data.User, &currentPortfolio, &data.Portfolio.Currency); err != nil {
+			if errors.Is(err, ErrMissingCurrencyConversion) {
+				util.RespondValidationError(writer, "Unable to convert to the selected currency")
+			} else {
+				util.RespondInternalServerError(writer, err)
+			}
+
+			return
+		}
+
+		data.Portfolio = currentPortfolio
 	}
 
 	if err := updatePortfolio(conn, &data.User, &data.Portfolio); err != nil {

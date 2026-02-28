@@ -49,6 +49,7 @@
             <span class="large-name">Portfolio %</span>
             <span class="small-name" aria-description="Portfolio %">%</span>
           </th>
+          <th class="price align-right">Current Price</th>
           <th class="value align-right">Value</th>
           <th class="performance align-right">Performance</th>
         </tr>
@@ -58,6 +59,7 @@
           <tr>
             <td class="currency"><a href="/portfolio/{{.Currency.Ticker}}">{{.Currency.Name}}</a></td>
             <td class="share-of-portfolio align-right">{{.ShareOfPortfolio.StringFixed 2}}%</td>
+            <td class="price align-right">{{.CurrentPrice.StringFixed 8}} {{$currency.Ticker}}</td>
             <td class="value align-right">{{.Value.StringFixed 2}} {{$currency.Ticker}}</td>
             <td class="performance align-right">{{.Performance.StringFixed 2}}%</td>
           </tr>

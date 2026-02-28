@@ -28,6 +28,10 @@
         <td>{{.Asset.Value.StringFixed 2}}</td>
       </tr>
       <tr>
+        <th>Current Price</th>
+        <td>{{.Asset.CurrentPrice.StringFixed 8}} {{.Portfolio.Currency.Ticker}}</td>
+      </tr>
+      <tr>
         <th>Performance</th>
         <td>{{.Asset.Performance.StringFixed 2}}%</td>
       </tr>
