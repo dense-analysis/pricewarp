@@ -6,7 +6,7 @@
     <form class="line-wrap-form" method="post">
       <div class="field-wrapper">
         Holding
-        <input class="price" type="text" pattern="^\d*(\.\d*)?$" required placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
+        <input class="price" type="text" pattern="^\d*(\.\d*)?$" placeholder="0.00" name="cash"{{if .Portfolio.Cash.IsPositive}} value="{{.Portfolio.Cash.String}}"{{end}}>
         <select name="currency">
           {{range .ToCurrencyList}}
             <option value="{{.Ticker}}"{{if eq .Ticker $currency.Ticker}} selected{{end}}>{{.Name}}</option>

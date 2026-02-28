@@ -307,12 +307,18 @@ func HandlePortfolioUpdate(conn *database.Conn, writer http.ResponseWriter, requ
 	}
 
 	var err error
-	data.Portfolio.Cash, err = decimal.NewFromString(request.Form.Get("cash"))
+	cash := request.Form.Get("cash")
 
-	if err != nil {
-		util.RespondValidationError(writer, "Invalid cash value")
+	if cash == "" {
+		data.Portfolio.Cash = decimal.Zero
+	} else {
+		data.Portfolio.Cash, err = decimal.NewFromString(cash)
 
-		return
+		if err != nil {
+			util.RespondValidationError(writer, "Invalid cash value")
+
+			return
+		}
 	}
 
 	if data.Portfolio.Cash.IsNegative() {
